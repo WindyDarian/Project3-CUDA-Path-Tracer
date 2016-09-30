@@ -5,7 +5,9 @@ CUDA Path Tracer
 
 * Ruoyu Fan
 * Tested on:
-  Ubuntu 16.04 x64, i7-4720HQ @ 2.60GHz, 16GB Memory, GTX 970M 3072MB (Laptop)
+  Windows 10 x64 / Ubuntu 16.04 x64, i7-4720HQ @ 2.60GHz, 16GB Memory, GTX 970M 3072MB (Laptop)
+  Visual Studio 2015 + CUDA 8.0 on Windows
+  gcc/g++ 5.4 + CUDA 8.0 on Ubuntu
 
 ### (TODO: Your README)
 
