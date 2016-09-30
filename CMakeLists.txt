@@ -43,6 +43,7 @@ set(CMAKE_CXX_STANDARD 11)
 
 # Enable CUDA debug info in debug mode builds
 list(APPEND CUDA_NVCC_FLAGS_DEBUG -G -g)
+list(APPEND CUDA_NVCC_FLAGS "-std=c++11")
 
 # OSX-specific hacks/fixes
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
@@ -53,7 +54,14 @@ endif()
 
 # Linux-specific hacks/fixes
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-    list(APPEND CMAKE_EXE_LINKER_FLAGS "-lX11 -lXxf86vm -lXrandr -lXi")
+    find_library(x11 NAMES X11)
+    find_library(xrandr NAMES Xrandr)
+    find_library(xi NAMES Xi)
+    find_library(xxf86vm NAMES Xxf86vm)
+    list(APPEND CORELIBS ${x11})
+    list(APPEND CORELIBS ${xrandr})
+    list(APPEND CORELIBS ${xi})
+    list(APPEND CORELIBS ${xxf86vm})
 endif()
 
 # Crucial magic for CUDA linking
