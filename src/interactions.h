@@ -2,6 +2,7 @@
 
 #include "intersections.h"
 
+
 // CHECKITOUT
 /**
  * Computes a cosine-weighted random direction in a hemisphere.
@@ -74,11 +75,11 @@ void scatterRay(
         const Material &m,
         thrust::default_random_engine &rng)
 {
-    // TODO: implement this.
+    // DONE: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
-	ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
-	ray.origin = intersect;
-	color *= m.color;
-
+	pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
+	pathSegment.ray.origin = intersect; // TODO: should I offset this?
+	pathSegment.remainingBounces -= 1; // TODO: should I do this?
+	pathSegment.color *= m.color;
 }
