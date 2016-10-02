@@ -78,8 +78,11 @@ void scatterRay(
     // DONE: implement this.
     // A basic implementation of pure-diffuse shading will just call the
     // calculateRandomDirectionInHemisphere defined above.
+
+
+    // Diffuse only
 	pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
 	pathSegment.ray.origin = intersect; // TODO: should I offset this?
-	pathSegment.remainingBounces -= 1; // TODO: should I do this?
 	pathSegment.color *= m.color;
+    pathSegment.remainingBounces -= 1;
 }

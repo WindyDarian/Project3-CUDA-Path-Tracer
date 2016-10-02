@@ -64,13 +64,24 @@ struct PathSegment {
 	glm::vec3 color;
 	int pixelIndex;
 	int remainingBounces;
+
+    __host__ __device__ bool terminated() const
+    {
+        return remainingBounces < 0;
+    }
+
+    __host__ __device__ void terminate() 
+    {
+        remainingBounces = -1;
+    }
 };
 
 // Use with a corresponding PathSegment to do:
 // 1) color contribution computation
 // 2) BSDF evaluation: generate a new ray
 struct ShadeableIntersection {
-  float t;
-  glm::vec3 surfaceNormal;
-  int materialId;
+    float t;
+    glm::vec3 intersection_point;
+    glm::vec3 surfaceNormal;
+    int materialId;
 };

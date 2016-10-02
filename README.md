@@ -9,9 +9,23 @@ CUDA Path Tracer
   * Visual Studio 2015 + CUDA 8.0 on Windows
   * gcc/g++ 5.4 + CUDA 8.0 on Ubuntu
 
-### (TODO: Your README)
+### Things I have done
 
-![first_screenshot](/screenshots/screenshot_begin.png)
+* Path tracing diffusive materials
+
+### TODOs
+
+* ~~Path tracing diffusive materials~~
+
+* Fix float error.
+
+#### Current State
+![current_screenshot](/screenshots/screenshot_current.png)
+
+
+#### That is what I started from
+![begin_screenshot](/screenshots/screenshot_begin.png)
+
 
 *DO NOT* leave the README to the last minute! It is a crucial part of the
 project, and we will not be able to grade you without a good README.
