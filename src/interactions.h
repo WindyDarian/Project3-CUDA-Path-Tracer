@@ -67,6 +67,7 @@ glm::vec3 calculateRandomDirectionInHemisphere(
  *
  * You may need to change the parameter list for your purposes!
  */
+
 __host__ __device__
 void scatterRay(
 		PathSegment & pathSegment,
@@ -78,11 +79,12 @@ void scatterRay(
 	// DONE: implement this.
 	// A basic implementation of pure-diffuse shading will just call the
 	// calculateRandomDirectionInHemisphere defined above.
-
+    constexpr float precision_fix = 1e-4f;
+    //const auto precision_fix = 1e-4f;
 
 	// Diffuse only
 	pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
-	pathSegment.ray.origin = intersect; // TODO: should I offset this?
+	pathSegment.ray.origin = intersect + precision_fix * normal;
 	pathSegment.color *= m.color;
 	pathSegment.remainingBounces -= 1;
 }
