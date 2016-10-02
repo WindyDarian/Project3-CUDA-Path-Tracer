@@ -12,6 +12,7 @@ CUDA Path Tracer
 ### Things I have done
 
 * Path tracing diffusive materials
+* Original __glfw3__ lib files doesn't support __Visual Studio 2015__. I updated __glfw3__ and put the source version into the `external/` folder and configured `CMakeLists.txt` so it becomes compatible with __Visual Studio 2015__ while can also build on other compilers supported.  
 
 ### TODOs
 

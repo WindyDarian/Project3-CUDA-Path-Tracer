@@ -14,7 +14,7 @@
 #include "utilities.h"
 #include "intersections.h"
 #include "interactions.h"
-#include "stream_compaction\efficient.h"
+#include "stream_compaction/efficient.h"
 
 #define ERRORCHECK 1
 
