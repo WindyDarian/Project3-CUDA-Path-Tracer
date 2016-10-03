@@ -265,6 +265,8 @@ __global__ void launchShadeAndScatter(
 	if (path_index >= num_paths) return;
 
 	auto& path_segment = pathSegments[path_index]; // TODO: compare speed between ref and value
+	if (path_segment.terminated()) return;
+	
 	const auto& intersection = shadeableIntersections[path_index];
 	const auto& material = materials[intersection.materialId];
 	auto rng = makeSeededRandomEngine(iter, path_index, depth); // TODO: iter
@@ -364,8 +366,6 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 			, hst_scene->geoms.size()
 			, dev_intersections
 		);
-		//checkCUDAError("trace one bounce");
-		//cudaDeviceSynchronize();
 		
 		// TODO: reorder paths by material?
 
