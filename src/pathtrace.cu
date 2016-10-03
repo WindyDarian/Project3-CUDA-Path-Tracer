@@ -86,16 +86,16 @@ void pathtraceInit(Scene *scene) {
 	cudaMalloc(&dev_image, pixelcount * sizeof(glm::vec3));
 	cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
 
-  	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
+	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
 
-  	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
-  	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
+	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
+	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
 
-  	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
-  	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
+	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
+	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
-  	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
-  	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
+	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 	// TODO: initialize any extra device memeory you need
 
@@ -249,7 +249,15 @@ __device__ void shadeAndScatter(
 		return;
 	}
 
-	evaluateBsdfAndScatter(path_segment, intersection.intersection_point, intersection.surfaceNormal, material, rng);
+	path_segment.remainingBounces--;
+	evaluateBsdfAndScatter(
+		  path_segment.ray
+		, path_segment.color
+		, intersection.intersection_point
+		, intersection.surfaceNormal
+		, material
+		, rng
+	);
 }
 
 __global__ void launchShadeAndScatter(	

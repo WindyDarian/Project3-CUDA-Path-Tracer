@@ -69,7 +69,8 @@ glm::vec3 calculateRandomDirectionInHemisphere(
 
 __host__ __device__
 void evaluateBsdfAndScatter(
-		PathSegment & pathSegment,
+		Ray& ray,
+		glm::vec3& color,
 		glm::vec3 intersect,
 		glm::vec3 normal,
 		const Material &m,
@@ -77,21 +78,19 @@ void evaluateBsdfAndScatter(
 {
 	constexpr float precision_fix = 1e-4f;
 
-	pathSegment.remainingBounces -= 1;
-
 	// TODO: partial?
 	if (m.hasReflective < 0.5f)
 	{
 		// Diffuse only
-		pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
-		pathSegment.ray.origin = intersect + precision_fix * normal;
-		pathSegment.color *= m.color;
+		ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
+		ray.origin = intersect + precision_fix * normal;
+		color *= m.color;
 	}
 	else
 	{
 		// Reflection only
-		pathSegment.ray.direction = glm::reflect(pathSegment.ray.direction, normal);
-		pathSegment.ray.origin = intersect + precision_fix * normal;
-		pathSegment.color *= m.color;
+		ray.direction = glm::reflect(ray.direction, normal);
+		ray.origin = intersect + precision_fix * normal;
+		color *= m.color;
 	}
 }
