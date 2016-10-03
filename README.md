@@ -11,22 +11,18 @@ CUDA Path Tracer
 
 ### Things I have done
 
-* Path tracing diffusive materials
+* Path tracing diffusive and perfect specular materials
 * Original __glfw3__ lib files doesn't support __Visual Studio 2015__. I updated __glfw3__ and put the source version into the `external/` folder and configured `CMakeLists.txt` so it becomes compatible with __Visual Studio 2015__ while can also build on other compilers supported.  
 
 ### TODOs
 
 * ~~Path tracing diffusive materials~~
-
-* Fix float error.
+* ~~Fix float number precision error~~
+* ~~Perfect specular materials~~
 
 #### Current State
-![current_screenshot](/screenshots/screenshot_current.png)
+![current_screenshot_or_render](/screenshots/screenshot_current.jpg)
 
 
 #### That is what I started from
 ![begin_screenshot](/screenshots/screenshot_begin.png)
-
-
-*DO NOT* leave the README to the last minute! It is a crucial part of the
-project, and we will not be able to grade you without a good README.
