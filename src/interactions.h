@@ -3,7 +3,6 @@
 #include "intersections.h"
 
 
-// CHECKITOUT
 /**
  * Computes a cosine-weighted random direction in a hemisphere.
  * Used for diffuse lighting.
@@ -79,8 +78,8 @@ void scatterRay(
 	// DONE: implement this.
 	// A basic implementation of pure-diffuse shading will just call the
 	// calculateRandomDirectionInHemisphere defined above.
-    constexpr float precision_fix = 1e-4f;
-    //const auto precision_fix = 1e-4f;
+	constexpr float precision_fix = 1e-4f;
+	//const auto precision_fix = 1e-4f;
 
 	// Diffuse only
 	pathSegment.ray.direction = calculateRandomDirectionInHemisphere(normal, rng);

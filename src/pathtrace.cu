@@ -372,11 +372,9 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 			, hst_scene->materials.size()
 			, dev_intersections
 			);
-		checkCUDAError("trace one bounce");
-		cudaDeviceSynchronize();
-		depth++;
-
-
+		//checkCUDAError("trace one bounce");
+		//cudaDeviceSynchronize();
+		
 		// TODO:
 		// --- Shading Stage ---
 		// Shade path segments based on intersections and generate new rays by
@@ -387,6 +385,7 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 		// path segments that have been reshuffled to be contiguous in memory.
 
 		//StreamCompaction::Efficient::compact
+		depth++;
 		iterationComplete = depth > 8; // TODO: should be based off stream compaction results.
 	}
 
