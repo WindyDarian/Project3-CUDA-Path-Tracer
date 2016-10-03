@@ -144,71 +144,11 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	}
 }
 
-// LOOK: "fake" shader demonstrating what you might do with the info in
-// a ShadeableIntersection, as well as how to use thrust's random number
-// generator. Observe that since the thrust random number generator basically
-// adds "noise" to the iteration, the image should start off noisy and get
-// cleaner as more iterations are computed.
-//
-// Note that this shader does NOT do a BSDF evaluation!
-// Your shaders should handle that - this can allow techniques such as
-// bump mapping.
-__device__ void shadeAndScatter(
-	int path_index
-	, int iter
-	, int depth
-	, PathSegment& path_segment
-	, const ShadeableIntersection& intersection
-	, const Material& material
-	)
-{
-	if (intersection.t <= 0.0f)
-	{
-		// If there was no intersection, color the ray black.
-		// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
-		// used for opacity, in which case they can indicate "no opacity".
-		// This can be useful for post-processing and image compositing.
-		path_segment.color = glm::vec3(0.0f);
-		path_segment.terminate();
-		// terminate the ray if the intersection does not exist... 
-
-		return;
-	}
-
-	// If the material indicates that the object was a light, "light" the ray
-	if (material.emittance > 0.0f)
-	{
-		path_segment.color *= (material.color * material.emittance);
-		path_segment.terminate();
-		return;
-	}
-
-	// A path which could never reach a light
-	if (path_segment.remainingBounces <= 0)
-	{
-		path_segment.color = glm::vec3(0.0f);
-		path_segment.terminate();
-		return;
-	}
-
-	// Scatter the ray
-	auto rng = makeSeededRandomEngine(iter, path_index, depth); // TODO: iter
-
-	scatterRay(path_segment, intersection.intersection_point, intersection.surfaceNormal, material, rng); 
-}
-
-// TODO: 
-// pathTraceOneBounce handles ray intersections, generate intersections for shading, 
-// and scatter new ray. You might want to call scatterRay from interactions.h
-__global__ void pathTraceOneBounce(
-	int iter
-	, int depth
-	, int num_paths
+__global__ void computeIntersections(
+	  int num_paths
 	, PathSegment * pathSegments
 	, Geom * geoms
 	, int geoms_size
-	, Material * materials
-	, int material_size
 	, ShadeableIntersection * intersections
 	)
 {
@@ -231,7 +171,6 @@ __global__ void pathTraceOneBounce(
 	glm::vec3 tmp_normal;
 
 	// naive parse through global geoms
-
 	for (int i = 0; i < geoms_size; i++)
 	{
 		Geom & geom = geoms[i];
@@ -270,11 +209,67 @@ __global__ void pathTraceOneBounce(
 	intersection.surfaceNormal = normal;
 	intersection.intersection_point = intersect_point;
 	
-	const auto& material = materials[material_id];
-
-	shadeAndScatter(path_index, iter, depth, pathSegment, intersection, material);
 }
 
+__device__ void shadeAndScatter(
+	int path_index
+	, PathSegment& path_segment
+	, const ShadeableIntersection& intersection
+	, const Material& material
+	, thrust::default_random_engine& rng
+	)
+{
+
+	if (intersection.t <= 0.0f)
+	{
+		// If there was no intersection, color the ray black.
+		// Lots of renderers use 4 channel color, RGBA, where A = alpha, often
+		// used for opacity, in which case they can indicate "no opacity".
+		// This can be useful for post-processing and image compositing.
+		path_segment.color = glm::vec3(0.0f);
+		path_segment.terminate();
+		// terminate the ray if the intersection does not exist... 
+
+		return;
+	}
+
+	// If the material indicates that the object was a light, "light" the ray
+	if (material.emittance > 0.0f)
+	{
+		path_segment.color *= (material.color * material.emittance);
+		path_segment.terminate();
+		return;
+	}
+
+	// A path which could never reach a light
+	if (path_segment.remainingBounces <= 0)
+	{
+		path_segment.color = glm::vec3(0.0f);
+		path_segment.terminate();
+		return;
+	}
+
+	scatterRay(path_segment, intersection.intersection_point, intersection.surfaceNormal, material, rng);
+}
+
+__global__ void launchShadeAndScatter(	
+	int iter
+	, int depth
+	, int num_paths
+	, ShadeableIntersection * shadeableIntersections
+	, PathSegment * pathSegments
+	, Material * materials)
+{
+	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (path_index >= num_paths) return;
+
+	auto& path_segment = pathSegments[path_index]; // TODO: compare speed between ref and value
+	const auto& intersection = shadeableIntersections[path_index];
+	const auto& material = materials[intersection.materialId];
+	auto rng = makeSeededRandomEngine(iter, path_index, depth); // TODO: iter
+	shadeAndScatter(path_index, path_segment, intersection, material, rng);
+}
 
 
 // Add the current iteration's output to the overall image
@@ -361,32 +356,32 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
-		pathTraceOneBounce <<<numblocksPathSegmentTracing, blockSize1d >>> (
-			  iter
-			, depth
-			, num_paths
+
+		computeIntersections <<<numblocksPathSegmentTracing, blockSize1d >>> (
+			  num_paths
 			, dev_paths
 			, dev_geoms
 			, hst_scene->geoms.size()
-			, dev_materials
-			, hst_scene->materials.size()
 			, dev_intersections
-			);
+		);
 		//checkCUDAError("trace one bounce");
 		//cudaDeviceSynchronize();
 		
-		// TODO:
-		// --- Shading Stage ---
-		// Shade path segments based on intersections and generate new rays by
-		// evaluating the BSDF.
-		// Start off with just a big kernel that handles all the different
-		// materials you have in the scenefile.
-		// TODO: compare between directly shading the path segments and shading
-		// path segments that have been reshuffled to be contiguous in memory.
+		// TODO: reorder paths by material?
+
+		launchShadeAndScatter <<<numblocksPathSegmentTracing, blockSize1d>>> (
+			  iter
+			, depth
+			, num_paths
+			, dev_intersections
+			, dev_paths
+			, dev_materials
+		);
 
 		//StreamCompaction::Efficient::compact
 		depth++;
 		iterationComplete = depth > 8; // TODO: should be based off stream compaction results.
+
 	}
 
 	// Assemble this iteration and apply it to the image
