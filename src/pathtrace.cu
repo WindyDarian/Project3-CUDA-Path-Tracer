@@ -69,12 +69,13 @@ __global__ void sendImageToPBO(uchar4* pbo, glm::ivec2 resolution,
 	}
 }
 
-static Scene * hst_scene = NULL;
-static glm::vec3 * dev_image = NULL;
-static Geom * dev_geoms = NULL;
-static Material * dev_materials = NULL;
-static PathSegment * dev_paths = NULL;
-static ShadeableIntersection * dev_intersections = NULL;
+Scene * hst_scene = nullptr;
+glm::vec3 * dev_image = nullptr;
+Geom * dev_geoms = nullptr;
+Material * dev_materials = nullptr;
+PathSegment * dev_paths = nullptr;
+ShadeableIntersection * dev_intersections = nullptr;
+
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
 
@@ -87,6 +88,7 @@ void pathtraceInit(Scene *scene) {
 	cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
 
 	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
+	
 
 	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
 	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
@@ -272,10 +274,10 @@ __global__ void launchShadeAndScatter(
 
 	if (path_index >= num_paths) return;
 
-	auto& path_segment = pathSegments[path_index]; // TODO: compare speed between ref and value
+	auto& path_segment = pathSegments[path_index]; 
 	if (path_segment.terminated()) return;
 	
-	const auto& intersection = shadeableIntersections[path_index];
+	const auto& intersection = shadeableIntersections[path_index]; // TODO: compare speed between ref and value
 	const auto& material = materials[intersection.materialId];
 	auto rng = makeSeededRandomEngine(iter, path_index, depth); // TODO: iter
 	shadeAndScatter(path_index, path_segment, intersection, material, rng);
@@ -296,6 +298,11 @@ __global__ void finalGather(int nPaths, glm::vec3 * image, PathSegment * iterati
 			image[iteration_path.pixelIndex] += iteration_path.color;
 		}
 	}
+}
+
+void removeTerminatedPaths()
+{
+	
 }
 
 /**
@@ -360,14 +367,13 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 	bool iterationComplete = false;
 	while (!iterationComplete)
 	{
-
 		// clean shading chunks
 		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
 
-		computeIntersections <<<numblocksPathSegmentTracing, blockSize1d >>> (
+		computeIntersections <<<numblocksPathSegmentTracing, blockSize1d>>> (
 			  num_paths
 			, dev_paths
 			, dev_geoms
@@ -385,11 +391,17 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 			, dev_paths
 			, dev_materials
 		);
-
+		
 		//StreamCompaction::Efficient::compact
 		depth++;
 		iterationComplete = depth > 8; // TODO: should be based off stream compaction results.
 
+		auto image_ptr = dev_image;
+		auto remove_and_gather_function = __device__ __host__ [image_ptr](PathSegment& path) 
+		{
+			
+		};
+		//thrust::remove_if()
 	}
 
 	// Assemble this iteration and apply it to the image
