@@ -12,8 +12,9 @@ CUDA Path Tracer
 ### Things I have done
 
 * Path tracing diffusive and perfect specular materials
-* Original __glfw3__ lib files doesn't support __Visual Studio 2015__. I updated __glfw3__ and put the source version into the `external/` folder and configured `CMakeLists.txt` so it becomes compatible with __Visual Studio 2015__ while can also build on other compilers supported. Also upgraded CMake __FindCuda__ module to solve linker errors in CUDA 8. 
-* Used `thrust::partition` and `thrust::remove_if` to compact the path segment array... but only to find that __the rendering speed after stream compaction is SLOWER__. Not yet tested the data in details, but I doubt it is due to the cost of moving `PathSegments` around. I plan to build a 0/1 array according to the termination state of the path segment array and scan/compact the 0/1 array to get an index array for forwarding the threads instead.
+* Original __glfw3__ lib files doesn't support __Visual Studio 2015__. I updated __glfw3__ and put the source version into the `external/` folder and configured `CMakeLists.txt` so it becomes compatible with __Visual Studio 2015__ while can also build on other compilers supported. Also upgraded CMake __FindCuda__ module to solve linker errors in CUDA 8.
+* Used `thrust::partition` and `thrust::remove_if` to compact the path segment array... but only to find that __the rendering speed after stream compaction is SLOWER__. Not yet tested the data in details, but I doubt it is due to the cost of moving `PathSegments` around. I plan to build a 0/1 array according to the termination state of the path segment array and scan/compact the 0/1 array to get an index array for forwarding the threads instead
+
 
 ### TODOs
 
@@ -21,6 +22,8 @@ CUDA Path Tracer
 * ~~Fix float number precision error~~
 * ~~Perfect specular materials~~
 * ~~Stream compaction~~
+* compact a pointer array instead of array of not-very-small `PathSegment`s to see if there is any performance increase
+* sort the array of `PathSegment`s by material.... or again sort that pointer array?
 
 #### Current State
 ![current_screenshot_or_render](/screenshots/screenshot_current.jpg)

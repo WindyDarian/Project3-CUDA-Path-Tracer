@@ -214,8 +214,7 @@ __global__ void computeIntersections(
 }
 
 __device__ void shadeAndScatter(
-	int path_index
-	, PathSegment& path_segment
+	  PathSegment& path_segment
 	, const ShadeableIntersection& intersection
 	, const Material& material
 	, thrust::default_random_engine& rng
@@ -262,13 +261,27 @@ __device__ void shadeAndScatter(
 	);
 }
 
-__global__ void kernShadeAndScatter(	
+__device__ void tryGatherPath(glm::vec3 * image, const PathSegment& path_segment)
+{
+	if (path_segment.terminated())
+	{
+		// only terminated paths can contribute to color
+		image[path_segment.pixelIndex] += path_segment.color;
+	}
+}
+
+/**
+* Gather the path if the path is terminated,
+* and add the output to current iteration's output image.
+*/
+__global__ void kernShadeScatterAndGatherTerminated(
 	int iter
 	, int depth
 	, int num_paths
 	, PathSegment * pathSegments
 	, const ShadeableIntersection * intersections
-	, const Material * materials)
+	, const Material * materials
+	, glm::vec3* image)
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -280,34 +293,36 @@ __global__ void kernShadeAndScatter(
 	auto& intersection = intersections[path_index]; // TODO: by ref or get a copy?
 	auto& material = materials[intersection.materialId];   // TODO: compare speed between ref and value, one in shadeAndScatter also
 	auto rng = makeSeededRandomEngine(iter, path_index, depth); // TODO: iter
-	shadeAndScatter(path_index, path_segment, intersection, material, rng);
+	shadeAndScatter(path_segment, intersection, material, rng);
+
+	tryGatherPath(image, path_segment);
 }
 
+//// Add the current iteration's output to the overall image
+//__global__ void finalGather(int nPaths, glm::vec3 * image, PathSegment * iterationPaths)
+//{
+//	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
+//
+//	if (index < nPaths)
+//	{
+//		const auto& iteration_path = iterationPaths[index];
+//		if (iteration_path.terminated())
+//		{
+//			// only terminated paths can contribute to color
+//			image[iteration_path.pixelIndex] += iteration_path.color;
+//		}
+//	}
+//}
 
-// Add the current iteration's output to the overall image
-__global__ void finalGather(int nPaths, glm::vec3 * image, PathSegment * iterationPaths)
-{
-	int index = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-	if (index < nPaths)
-	{
-		const auto& iteration_path = iterationPaths[index];
-		if (iteration_path.terminated())
-		{
-			// only terminated paths can contribute to color
-			image[iteration_path.pixelIndex] += iteration_path.color;
-		}
-	}
-}
-
-struct isPathAlive
-{
-	__host__ __device__
-		bool operator()(const PathSegment& path_segment)
-	{
-		return !path_segment.terminated();
-	}
-};
+//struct isPathAlive
+//{
+//	__host__ __device__
+//		bool operator()(const PathSegment& path_segment)
+//	{
+//		return !path_segment.terminated();
+//	}
+//};
 
 struct isPathTerminated
 {
@@ -315,6 +330,16 @@ struct isPathTerminated
 		bool operator()(const PathSegment& path_segment)
 	{
 		return path_segment.terminated();
+	}
+};
+
+// what if I just compact a pointer array?
+struct isPointedPathTerminated
+{
+	__host__ __device__
+		bool operator()(const PathSegment* path_segment_p)
+	{
+		return path_segment_p->terminated();
 	}
 };
 
@@ -397,31 +422,34 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 		
 		// TODO: reorder paths by material?
 
-		kernShadeAndScatter <<<numblocksPathSegmentTracing, blockSize1d>>> (
+		kernShadeScatterAndGatherTerminated <<<numblocksPathSegmentTracing, blockSize1d>>> (
 			  iter
 			, depth
 			, num_paths_active
 			, dev_paths
 			, dev_intersections
 			, dev_materials
+			, dev_image
 		);
 
-		//auto new_end = thrust::partition(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathAlive()); //slower
+		//auto new_end = thrust::partition(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathAlive()); //slower than no compaction
 		//num_paths_active = new_end - thrust_dev_paths;
 
-		//auto new_end = thrust::remove_if(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathTerminated()); // slower
-		//num_paths_active = new_end - thrust_dev_paths;
+		auto new_end = thrust::remove_if(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathTerminated()); // slower
+		num_paths_active = new_end - thrust_dev_paths;
+
+		// TODO: compact a pointer array instead to see if there is any performance increase
 
 		depth++;
-		//iterationComplete = depth > traceDepth;
-		//iterationComplete = num_paths_active <= 0;
-		iterationComplete = num_paths_active <= 0 || depth > traceDepth; 
+		//iterationComplete = depth > traceDepth;  // use if not using compaction
+		iterationComplete = num_paths_active <= 0; 
+		//iterationComplete = num_paths_active <= 0 || depth > traceDepth;  // safest one
 		
 	}
 
-	// Assemble this iteration and apply it to the image
-	dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
-	finalGather <<<numBlocksPixels, blockSize1d >>> (num_paths, dev_image, dev_paths);
+	//// Assemble this iteration and apply it to the image
+	//dim3 numBlocksPixels = (pixelcount + blockSize1d - 1) / blockSize1d;
+	//finalGather <<<numBlocksPixels, blockSize1d >>> (num_paths, dev_image, dev_paths);
 
 	///////////////////////////////////////////////////////////////////////////
 

@@ -59,7 +59,8 @@ struct RenderState {
     std::string imageName;
 };
 
-struct PathSegment {
+struct PathSegment 
+{
 	Ray ray;
 	glm::vec3 color;
 	int pixelIndex;
