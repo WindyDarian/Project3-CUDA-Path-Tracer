@@ -13,12 +13,14 @@ CUDA Path Tracer
 
 * Path tracing diffusive and perfect specular materials
 * Original __glfw3__ lib files doesn't support __Visual Studio 2015__. I updated __glfw3__ and put the source version into the `external/` folder and configured `CMakeLists.txt` so it becomes compatible with __Visual Studio 2015__ while can also build on other compilers supported.  
+* Used `thrust::partition` and `thrust::remove_if` to compact the path segment array... but only to find that __the rendering speed after stream compaction is SLOWER__. Not yet tested the data in details, but I doubt it is due to the cost of moving `PathSegments` around. I plan to build a 0/1 array according to the termination state of the path segment array and scan/compact the 0/1 array to get an index array for forwarding the threads instead.
 
 ### TODOs
 
 * ~~Path tracing diffusive materials~~
 * ~~Fix float number precision error~~
 * ~~Perfect specular materials~~
+* ~~Stream compaction~~
 
 #### Current State
 ![current_screenshot_or_render](/screenshots/screenshot_current.jpg)

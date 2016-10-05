@@ -292,6 +292,15 @@ __global__ void finalGather(int nPaths, glm::vec3 * image, PathSegment * iterati
 	}
 }
 
+struct isPathAlive
+{
+	__host__ __device__
+		bool operator()(const PathSegment& path_segment)
+	{
+		return !path_segment.terminated();
+	}
+};
+
 struct isPathTerminated
 {
 	__host__ __device__
@@ -387,12 +396,16 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 			, dev_materials
 		);
 
-		auto new_end = thrust::partition(thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathTerminated());
+		auto new_end = thrust::partition(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathAlive()); //slower
 		num_paths_active = new_end - thrust_dev_paths;
 
+		//auto new_end = thrust::remove_if(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathTerminated()); // slower
+		//num_paths_active = new_end - thrust_dev_paths;
+
 		depth++;
-		iterationComplete = depth > 8;
-		//iterationComplete = num_paths_active <= 0; // TODO: should be based off stream compaction results.
+		//iterationComplete = depth > traceDepth;
+		//iterationComplete = num_paths_active <= 0;
+		iterationComplete = num_paths_active <= 0 || depth > traceDepth; 
 		
 	}
 
