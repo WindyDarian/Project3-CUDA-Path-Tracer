@@ -387,6 +387,7 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 			, dev_materials
 		);
 
+		auto new_end = thrust::partition(thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathTerminated());
 		num_paths_active = new_end - thrust_dev_paths;
 
 		depth++;
