@@ -75,6 +75,7 @@ glm::vec3 * dev_image = nullptr;
 Geom * dev_geoms = nullptr;
 Material * dev_materials = nullptr;
 PathSegment * dev_paths = nullptr;
+ShadeableIntersection * dev_intersections = nullptr;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -95,6 +96,9 @@ void pathtraceInit(Scene *scene) {
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
 
+	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
+	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+
 	// TODO: initialize any extra device memeory you need
 
 	checkCUDAError("pathtraceInit");
@@ -105,6 +109,7 @@ void pathtraceFree() {
   	cudaFree(dev_paths);
   	cudaFree(dev_geoms);
   	cudaFree(dev_materials);
+	cudaFree(dev_intersections);
 	// TODO: clean up any extra device memory you created
 
 	checkCUDAError("pathtraceFree");
@@ -142,9 +147,10 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 }
 
 __global__ void computeIntersections(
-	  int num_paths
-	, PathSegment * pathSegments
-	, Geom * geoms
+	int num_paths
+	, const PathSegment * pathSegments
+	, ShadeableIntersection * intersections
+	, const Geom * geoms
 	, int geoms_size
 	)
 {
@@ -169,7 +175,7 @@ __global__ void computeIntersections(
 	// naive parse through global geoms
 	for (int i = 0; i < geoms_size; i++)
 	{
-		Geom & geom = geoms[i];
+		auto& geom = geoms[i];
 
 		if (geom.type == CUBE)
 		{
@@ -194,12 +200,12 @@ __global__ void computeIntersections(
 
 	if (hit_geom_index == -1)
 	{
-		pathSegment.intersection.t = -1.0f;
+		intersections[path_index].t = -1.0f;
 		return;
 	}
 
 	auto material_id = geoms[hit_geom_index].materialid;
-	auto& intersection = pathSegment.intersection;
+	auto& intersection = intersections[path_index];
 	intersection.t = t_min;
 	intersection.materialId = material_id;
 	intersection.surfaceNormal = normal;
@@ -210,11 +216,11 @@ __global__ void computeIntersections(
 __device__ void shadeAndScatter(
 	int path_index
 	, PathSegment& path_segment
+	, const ShadeableIntersection& intersection
 	, const Material& material
 	, thrust::default_random_engine& rng
 	)
 {
-	const auto& intersection = path_segment.intersection; // TODO: by ref or get a copy?
 
 	if (intersection.t <= 0.0f)
 	{
@@ -261,7 +267,8 @@ __global__ void kernShadeAndScatter(
 	, int depth
 	, int num_paths
 	, PathSegment * pathSegments
-	, Material * materials)
+	, const ShadeableIntersection * intersections
+	, const Material * materials)
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -270,9 +277,10 @@ __global__ void kernShadeAndScatter(
 	auto& path_segment = pathSegments[path_index]; 
 	if (path_segment.terminated()) return;
 	
-	const auto& material = materials[path_segment.intersection.materialId];   // TODO: compare speed between ref and value, one in shadeAndScatter also
+	auto& intersection = intersections[path_index]; // TODO: by ref or get a copy?
+	auto& material = materials[intersection.materialId];   // TODO: compare speed between ref and value, one in shadeAndScatter also
 	auto rng = makeSeededRandomEngine(iter, path_index, depth); // TODO: iter
-	shadeAndScatter(path_index, path_segment, material, rng);
+	shadeAndScatter(path_index, path_segment, intersection, material, rng);
 }
 
 
@@ -382,6 +390,7 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 		computeIntersections <<<numblocksPathSegmentTracing, blockSize1d>>> (
 			num_paths_active
 			, dev_paths
+			, dev_intersections
 			, dev_geoms
 			, hst_scene->geoms.size()
 		);
@@ -393,11 +402,12 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 			, depth
 			, num_paths_active
 			, dev_paths
+			, dev_intersections
 			, dev_materials
 		);
 
-		auto new_end = thrust::partition(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathAlive()); //slower
-		num_paths_active = new_end - thrust_dev_paths;
+		//auto new_end = thrust::partition(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathAlive()); //slower
+		//num_paths_active = new_end - thrust_dev_paths;
 
 		//auto new_end = thrust::remove_if(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathTerminated()); // slower
 		//num_paths_active = new_end - thrust_dev_paths;
