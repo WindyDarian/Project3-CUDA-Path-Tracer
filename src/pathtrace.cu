@@ -74,7 +74,6 @@ glm::vec3 * dev_image = nullptr;
 Geom * dev_geoms = nullptr;
 Material * dev_materials = nullptr;
 PathSegment * dev_paths = nullptr;
-ShadeableIntersection * dev_intersections = nullptr;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -88,16 +87,12 @@ void pathtraceInit(Scene *scene) {
 	cudaMemset(dev_image, 0, pixelcount * sizeof(glm::vec3));
 
 	cudaMalloc(&dev_paths, pixelcount * sizeof(PathSegment));
-	
 
 	cudaMalloc(&dev_geoms, scene->geoms.size() * sizeof(Geom));
 	cudaMemcpy(dev_geoms, scene->geoms.data(), scene->geoms.size() * sizeof(Geom), cudaMemcpyHostToDevice);
 
 	cudaMalloc(&dev_materials, scene->materials.size() * sizeof(Material));
 	cudaMemcpy(dev_materials, scene->materials.data(), scene->materials.size() * sizeof(Material), cudaMemcpyHostToDevice);
-
-	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
-	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 	// TODO: initialize any extra device memeory you need
 
@@ -109,7 +104,6 @@ void pathtraceFree() {
   	cudaFree(dev_paths);
   	cudaFree(dev_geoms);
   	cudaFree(dev_materials);
-  	cudaFree(dev_intersections);
 	// TODO: clean up any extra device memory you created
 
 	checkCUDAError("pathtraceFree");
@@ -151,7 +145,6 @@ __global__ void computeIntersections(
 	, PathSegment * pathSegments
 	, Geom * geoms
 	, int geoms_size
-	, ShadeableIntersection * intersections
 	)
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -200,12 +193,12 @@ __global__ void computeIntersections(
 
 	if (hit_geom_index == -1)
 	{
-		intersections[path_index].t = -1.0f;
+		pathSegment.intersection.t = -1.0f;
 		return;
 	}
 
 	auto material_id = geoms[hit_geom_index].materialid;
-	auto& intersection = intersections[path_index];
+	auto& intersection = pathSegment.intersection;
 	intersection.t = t_min;
 	intersection.materialId = material_id;
 	intersection.surfaceNormal = normal;
@@ -216,11 +209,11 @@ __global__ void computeIntersections(
 __device__ void shadeAndScatter(
 	int path_index
 	, PathSegment& path_segment
-	, const ShadeableIntersection& intersection
 	, const Material& material
 	, thrust::default_random_engine& rng
 	)
 {
+	const auto& intersection = path_segment.intersection; // TODO: by ref or get a copy?
 
 	if (intersection.t <= 0.0f)
 	{
@@ -262,11 +255,10 @@ __device__ void shadeAndScatter(
 	);
 }
 
-__global__ void launchShadeAndScatter(	
+__global__ void kernShadeAndScatter(	
 	int iter
 	, int depth
 	, int num_paths
-	, ShadeableIntersection * shadeableIntersections
 	, PathSegment * pathSegments
 	, Material * materials)
 {
@@ -277,10 +269,9 @@ __global__ void launchShadeAndScatter(
 	auto& path_segment = pathSegments[path_index]; 
 	if (path_segment.terminated()) return;
 	
-	const auto& intersection = shadeableIntersections[path_index]; // TODO: compare speed between ref and value
-	const auto& material = materials[intersection.materialId];
+	const auto& material = materials[path_segment.intersection.materialId];   // TODO: compare speed between ref and value, one in shadeAndScatter also
 	auto rng = makeSeededRandomEngine(iter, path_index, depth); // TODO: iter
-	shadeAndScatter(path_index, path_segment, intersection, material, rng);
+	shadeAndScatter(path_index, path_segment, material, rng);
 }
 
 
@@ -298,11 +289,6 @@ __global__ void finalGather(int nPaths, glm::vec3 * image, PathSegment * iterati
 			image[iteration_path.pixelIndex] += iteration_path.color;
 		}
 	}
-}
-
-void removeTerminatedPaths()
-{
-	
 }
 
 /**
@@ -367,8 +353,6 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 	bool iterationComplete = false;
 	while (!iterationComplete)
 	{
-		// clean shading chunks
-		cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
@@ -378,30 +362,23 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 			, dev_paths
 			, dev_geoms
 			, hst_scene->geoms.size()
-			, dev_intersections
 		);
 		
 		// TODO: reorder paths by material?
 
-		launchShadeAndScatter <<<numblocksPathSegmentTracing, blockSize1d>>> (
+		kernShadeAndScatter <<<numblocksPathSegmentTracing, blockSize1d>>> (
 			  iter
 			, depth
 			, num_paths
-			, dev_intersections
 			, dev_paths
 			, dev_materials
 		);
+
+		//thrust::remove_if
 		
-		//StreamCompaction::Efficient::compact
 		depth++;
 		iterationComplete = depth > 8; // TODO: should be based off stream compaction results.
-
-		auto image_ptr = dev_image;
-		auto remove_and_gather_function = __device__ __host__ [image_ptr](PathSegment& path) 
-		{
-			
-		};
-		//thrust::remove_if()
+		
 	}
 
 	// Assemble this iteration and apply it to the image
