@@ -6,6 +6,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/remove.h>
+#include <thrust/device_ptr.h>
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -291,6 +292,15 @@ __global__ void finalGather(int nPaths, glm::vec3 * image, PathSegment * iterati
 	}
 }
 
+struct isPathTerminated
+{
+	__host__ __device__
+		bool operator()(const PathSegment& path_segment)
+	{
+		return path_segment.terminated();
+	}
+};
+
 /**
  * Wrapper for the __global__ call that sets up the kernel calls and does a ton
  * of memory management
@@ -344,8 +354,11 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 	checkCUDAError("generate camera ray");
 
 	int depth = 0;
+
+	thrust::device_ptr<PathSegment> thrust_dev_paths(dev_paths);
 	PathSegment* dev_path_end = dev_paths + pixelcount;
-	int num_paths = dev_path_end - dev_paths;
+	auto num_paths = dev_path_end - dev_paths;
+	auto num_paths_active = num_paths;
 
 	// --- PathSegment Tracing Stage ---
 	// Shoot ray into scene, bounce between objects, push shading chunks
@@ -355,10 +368,10 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 	{
 
 		// tracing
-		dim3 numblocksPathSegmentTracing = (num_paths + blockSize1d - 1) / blockSize1d;
+		dim3 numblocksPathSegmentTracing = (num_paths_active + blockSize1d - 1) / blockSize1d;
 
 		computeIntersections <<<numblocksPathSegmentTracing, blockSize1d>>> (
-			  num_paths
+			num_paths_active
 			, dev_paths
 			, dev_geoms
 			, hst_scene->geoms.size()
@@ -369,15 +382,16 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 		kernShadeAndScatter <<<numblocksPathSegmentTracing, blockSize1d>>> (
 			  iter
 			, depth
-			, num_paths
+			, num_paths_active
 			, dev_paths
 			, dev_materials
 		);
 
-		//thrust::remove_if
-		
+		num_paths_active = new_end - thrust_dev_paths;
+
 		depth++;
-		iterationComplete = depth > 8; // TODO: should be based off stream compaction results.
+		iterationComplete = depth > 8;
+		//iterationComplete = num_paths_active <= 0; // TODO: should be based off stream compaction results.
 		
 	}
 
