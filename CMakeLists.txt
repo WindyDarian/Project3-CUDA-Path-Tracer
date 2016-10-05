@@ -1,11 +1,10 @@
 cmake_minimum_required(VERSION 3.0)
 project(cis565_path_tracer)
 
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/external/cmake")
 
 # Set up include and lib paths
 set(EXTERNAL "external")
-include_directories("${EXTERNAL}")
 include_directories("${EXTERNAL}/include")
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     set(EXTERNAL_LIB_PATH "${EXTERNAL}/lib/osx")
