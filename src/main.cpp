@@ -150,7 +150,8 @@ void runCuda() {
 		std::chrono::duration<double> duro = time_end - time_start;
 		auto time_elapsed = duro.count();
 		double iterations_per_sec = time_elapsed > 0 ? renderState->iterations / time_elapsed : renderState->iterations;
-		std::cout << renderState->iterations << " iterations in " << time_elapsed << " seconds, iterations per sec: " << iterations_per_sec;
+		std::cout << renderState->iterations << " iterations in " << time_elapsed << " seconds, iterations per sec: " << iterations_per_sec << std::endl;
+		std::cout << std::endl;
 
         saveImage();
         pathtraceFree();
