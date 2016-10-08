@@ -28,6 +28,7 @@ CUDA Path Tracer
 * compact a pointer array instead of array of not-very-small `PathSegment`s to see if there is any performance increase
 * ~~sort the array of `PathSegment`s by material....~~ or again sort that pointer array?
 * ~~cache first intersection~~
+* Test copy values instead of references for some data (for example intersection of current path segment) at intersection/shading stage
 
 ### Performance Tests
 #### Core Features
@@ -42,18 +43,20 @@ The results are as follows (tested with default "cornell.txt" scene, with diffus
 
 | Test Case Id | ENABLE_STREAM_COMPACTION | SORT_PATH_BY_MATERIAL | CACHE_FIRST_INTERSECTION | Time for 5000 iterations (s) | Iterations per second |
 |--------------|--------------------------|-----------------------|--------------------------|------------------------------|-----------------------|
-| 000          | OFF                      | OFF                   | OFF                      | 125.649                      | 39.7934               |
-| 100          | ON                       | OFF                   | OFF                      | 255.476                      | 19.5713               |
-| 010          | OFF                      | ON                    | OFF                      | 1037.25                      | 4.82043               |
-| 001          | OFF                      | OFF                   | ON                       | 118.737                      | 42.1099               |
-| 110          | ON                       | ON                    | OFF                      | 747.851                      | 6.68582               |
-| 111          | ON                       | ON                    | ON                       | 724.487                      | 6.90143               |
+| 000          | OFF                      | OFF                   | OFF                      | 188.283                      | 26.5557               |
+| 100          | ON                       | OFF                   | OFF                      | 332.301                      | 15.0466               |
+| 010          | OFF                      | ON                    | OFF                      | 1356.74                      | 3.68532               |
+| 001          | OFF                      | OFF                   | ON                       | 169.077                      | 29.5723               |
+| 110          | ON                       | ON                    | OFF                      | 970.748                      | 5.15067               |
+| 111          | ON                       | ON                    | ON                       | 956.356                      | 5.22818               |
 
 ![chart_core_features](/test_results/chart_core_features.png)
 
 Interestingly, while both `ENABLE_STREAM_COMPACTION` (100) and `SORT_PATH_BY_MATERIAL` (010) are slower than the naive way (000), enabling them both (110) is faster than enabling `SORT_PATH_BY_MATERIAL` (010) only. That is because enabling stream compaction reduces a lot work of sorting.
 
+#### Additional Core Feature Tests
 
+Doing it.
 
 #### Current State
 ![current_screenshot_or_render](/rendered_images/cornell.2016-10-03_04-33-43z.5000samp.png)

@@ -18,8 +18,8 @@
 #include "stream_compaction/efficient.h"
 
 // TOGGLE THEM
-#define ENABLE_STREAM_COMPACTION 0
-#define SORT_PATH_BY_MATERIAL 0
+#define ENABLE_STREAM_COMPACTION 1
+#define SORT_PATH_BY_MATERIAL 1
 #define CACHE_FIRST_INTERSECTION 1
 
 #define ERRORCHECK 1
