@@ -20,7 +20,7 @@
 // TOGGLE THEM
 #define ENABLE_STREAM_COMPACTION 0
 #define SORT_PATH_BY_MATERIAL 0
-#define CACHE_FIRST_BONUCE 1
+#define CACHE_FIRST_INTERSECTION 1
 
 #define ERRORCHECK 1
 
@@ -449,7 +449,7 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 				, hst_scene->geoms.size()
 			);
 		}
-#if CACHE_FIRST_BONUCE
+#if CACHE_FIRST_INTERSECTION
 		// cache first intersection
 		if (!first_intersection_cached)
 		{
