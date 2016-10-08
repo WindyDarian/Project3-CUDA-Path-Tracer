@@ -18,8 +18,8 @@
 #include "stream_compaction/efficient.h"
 
 // TOGGLE THEM
-#define SORT_PATH_BY_MATERIAL 1
-#define CACHE_FIRST_BONUCE 1
+#define SORT_PATH_BY_MATERIAL 0
+#define CACHE_FIRST_BONUCE 0
 
 #define ERRORCHECK 1
 
@@ -81,6 +81,7 @@ Material * dev_materials = nullptr;
 PathSegment * dev_paths = nullptr;
 ShadeableIntersection * dev_intersections = nullptr;
 ShadeableIntersection * dev_cached_first_intersections = nullptr;
+bool first_intersection_cached = false;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -106,6 +107,7 @@ void pathtraceInit(Scene *scene) {
 
 	cudaMalloc(&dev_cached_first_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_cached_first_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+	first_intersection_cached = false;
 
 	// TODO: initialize any extra device memeory you need
 
@@ -424,8 +426,6 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 	// --- PathSegment Tracing Stage ---
 	// Shoot ray into scene, bounce between objects, push shading chunks
 
-	bool first_intersection_cached = false;
-
 	bool iterationComplete = false;
 	while (!iterationComplete)
 	{
@@ -448,6 +448,14 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 				, hst_scene->geoms.size()
 			);
 		}
+#if CACHE_FIRST_BONUCE
+		// cache first intersection
+		if (!first_intersection_cached)
+		{
+			first_intersection_cached = true;
+			cudaMemcpy(dev_cached_first_intersections, dev_intersections, num_paths * sizeof(dev_cached_first_intersections[0]), cudaMemcpyDeviceToDevice);
+		}
+#endif
 
 #if SORT_PATH_BY_MATERIAL 
 		// DONE: reorder paths by material
