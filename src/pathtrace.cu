@@ -17,6 +17,10 @@
 #include "interactions.h"
 #include "stream_compaction/efficient.h"
 
+// TOGGLE THEM
+#define SORT_PATH_BY_MATERIAL 1
+#define CACHE_FIRST_BONUCE 1
+
 #define ERRORCHECK 1
 
 #define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
@@ -76,6 +80,7 @@ Geom * dev_geoms = nullptr;
 Material * dev_materials = nullptr;
 PathSegment * dev_paths = nullptr;
 ShadeableIntersection * dev_intersections = nullptr;
+ShadeableIntersection * dev_cached_first_intersections = nullptr;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -99,6 +104,9 @@ void pathtraceInit(Scene *scene) {
 	cudaMalloc(&dev_intersections, pixelcount * sizeof(ShadeableIntersection));
 	cudaMemset(dev_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
 
+	cudaMalloc(&dev_cached_first_intersections, pixelcount * sizeof(ShadeableIntersection));
+	cudaMemset(dev_cached_first_intersections, 0, pixelcount * sizeof(ShadeableIntersection));
+
 	// TODO: initialize any extra device memeory you need
 
 	checkCUDAError("pathtraceInit");
@@ -110,6 +118,7 @@ void pathtraceFree() {
   	cudaFree(dev_geoms);
   	cudaFree(dev_materials);
 	cudaFree(dev_intersections);
+	cudaFree(dev_cached_first_intersections);
 	// TODO: clean up any extra device memory you created
 
 	checkCUDAError("pathtraceFree");
@@ -198,14 +207,16 @@ __global__ void computeIntersections(
 		}
 	}
 
+
+	auto& intersection = intersections[path_index];
 	if (hit_geom_index == -1)
 	{
-		intersections[path_index].t = -1.0f;
+		intersection.t = -1.0f;
+		intersection.materialId = -1; // for sorting by material
 		return;
 	}
 
 	auto material_id = geoms[hit_geom_index].materialid;
-	auto& intersection = intersections[path_index];
 	intersection.t = t_min;
 	intersection.materialId = material_id;
 	intersection.surfaceNormal = normal;
@@ -324,6 +335,15 @@ __global__ void kernShadeScatterAndGatherTerminated(
 //	}
 //};
 
+struct compMaterialId
+{
+	__host__ __device__ 
+		bool operator() (const ShadeableIntersection& a, const ShadeableIntersection& b)
+	{
+		return a.materialId < b.materialId;  // legimate because I gave a -1 to materialId if there is no intersection
+	}
+};
+
 struct isPathTerminated
 {
 	__host__ __device__
@@ -397,30 +417,43 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 
 	int depth = 0;
 
-	thrust::device_ptr<PathSegment> thrust_dev_paths(dev_paths);
-	PathSegment* dev_path_end = dev_paths + pixelcount;
-	auto num_paths = dev_path_end - dev_paths;
+	//thrust::device_ptr<PathSegment> thrust_dev_paths(dev_paths);
+	//PathSegment* dev_path_end = dev_paths + pixelcount;
+	auto num_paths = pixelcount;
 	auto num_paths_active = num_paths;
-
 	// --- PathSegment Tracing Stage ---
 	// Shoot ray into scene, bounce between objects, push shading chunks
+
+	bool first_intersection_cached = false;
 
 	bool iterationComplete = false;
 	while (!iterationComplete)
 	{
+		// no need to memset here maybe
 
 		// tracing
 		dim3 numblocksPathSegmentTracing = (num_paths_active + blockSize1d - 1) / blockSize1d;
 
-		computeIntersections <<<numblocksPathSegmentTracing, blockSize1d>>> (
-			num_paths_active
-			, dev_paths
-			, dev_intersections
-			, dev_geoms
-			, hst_scene->geoms.size()
-		);
-		
-		// TODO: reorder paths by material?
+		if (depth == 0 && first_intersection_cached)
+		{
+			cudaMemcpy(dev_intersections, dev_cached_first_intersections, num_paths * sizeof(dev_cached_first_intersections[0]), cudaMemcpyDeviceToDevice);
+		}
+		else
+		{
+			computeIntersections <<<numblocksPathSegmentTracing, blockSize1d>>> (
+				num_paths_active
+				, dev_paths
+				, dev_intersections
+				, dev_geoms
+				, hst_scene->geoms.size()
+			);
+		}
+
+#if SORT_PATH_BY_MATERIAL 
+		// DONE: reorder paths by material
+		// TODO: sort pointers only
+		thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths_active, dev_paths, compMaterialId());
+#endif
 
 		kernShadeScatterAndGatherTerminated <<<numblocksPathSegmentTracing, blockSize1d>>> (
 			  iter
@@ -435,8 +468,8 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 		//auto new_end = thrust::partition(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathAlive()); //slower than no compaction
 		//num_paths_active = new_end - thrust_dev_paths;
 
-		auto new_end = thrust::remove_if(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathTerminated()); // slower
-		num_paths_active = new_end - thrust_dev_paths;
+		auto new_end = thrust::remove_if(thrust::device, dev_paths, dev_paths + num_paths_active, isPathTerminated()); // slower
+		num_paths_active = new_end - dev_paths;
 
 		// TODO: compact a pointer array instead to see if there is any performance increase
 
