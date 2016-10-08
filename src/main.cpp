@@ -1,6 +1,7 @@
 #include "main.h"
 #include "preview.h"
 #include <cstring>
+#include <chrono>
 
 static std::string startTimeString;
 
@@ -25,6 +26,10 @@ int iteration;
 
 int width;
 int height;
+
+using time_point_t = std::chrono::high_resolution_clock::time_point;
+time_point_t time_start;
+time_point_t time_end;
 
 //-------------------------------
 //-------------MAIN--------------
@@ -117,6 +122,8 @@ void runCuda() {
         cameraPosition += cam.lookAt;
         cam.position = cameraPosition;
         camchanged = false;
+		
+		time_start = std::chrono::high_resolution_clock::now();
       }
 
     // Map OpenGL buffer object for writing from CUDA on a single GPU
@@ -139,6 +146,12 @@ void runCuda() {
         // unmap buffer object
         cudaGLUnmapBufferObject(pbo);
     } else {
+		time_end = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double> duro = time_end - time_start;
+		auto time_elapsed = duro.count();
+		double iterations_per_sec = time_elapsed > 0 ? renderState->iterations / time_elapsed : renderState->iterations;
+		std::cout << renderState->iterations << " iterations in " << time_elapsed << " seconds, iterations per sec: " << iterations_per_sec;
+
         saveImage();
         pathtraceFree();
         cudaDeviceReset();

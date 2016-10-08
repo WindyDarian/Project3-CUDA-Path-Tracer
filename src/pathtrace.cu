@@ -18,6 +18,7 @@
 #include "stream_compaction/efficient.h"
 
 // TOGGLE THEM
+#define ENABLE_STREAM_COMPACTION 0
 #define SORT_PATH_BY_MATERIAL 0
 #define CACHE_FIRST_BONUCE 0
 
@@ -473,18 +474,21 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 			, dev_image
 		);
 
-		//auto new_end = thrust::partition(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathAlive()); //slower than no compaction
+#if ENABLE_STREAM_COMPACTION
+		//auto new_end = thrust::partition(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathAlive()); //slower than thrust::remove_if
 		//num_paths_active = new_end - thrust_dev_paths;
-
 		auto new_end = thrust::remove_if(thrust::device, dev_paths, dev_paths + num_paths_active, isPathTerminated()); // slower
 		num_paths_active = new_end - dev_paths;
-
+#endif
 		// TODO: compact a pointer array instead to see if there is any performance increase
 
 		depth++;
-		//iterationComplete = depth > traceDepth;  // use if not using compaction
+
+#if ENABLE_STREAM_COMPACTION
 		iterationComplete = num_paths_active <= 0; 
-		//iterationComplete = num_paths_active <= 0 || depth > traceDepth;  // safest one
+#else
+		iterationComplete = num_paths_active <= 0 || depth > traceDepth;  // safest one
+#endif
 		
 	}
 

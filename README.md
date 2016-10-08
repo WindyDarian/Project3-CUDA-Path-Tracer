@@ -17,6 +17,7 @@ CUDA Path Tracer
   * Used `thrust::partition` and `thrust::remove_if` to compact the path segment array... but only to find that __the rendering speed after stream compaction is SLOWER__. Not yet tested the data in details, but I doubt it is due to the cost of moving `PathSegments` around. I plan to build a 0/1 array according to the termination state of the path segment array and scan/compact the 0/1 array to get an index array for forwarding the threads instead
   * Sorts by material after getting intersections. (Toggleable by changing `SORT_PATH_BY_MATERIAL` in `pathtrace.cu`)
   * Caching first intersections. (Toggleable by changing `CACHE_FIRST_BONUCE` in `pathtrace.cu`)
+  * Time measurement.
 
 ### TODOs
 
