@@ -30,8 +30,7 @@ CUDA Path Tracer
 * ~~cache first intersection~~
 * Test copy values instead of references for some data (for example intersection of current path segment) at intersection/shading stage
 
-### Performance Tests
-#### Core Features
+### Performance Test: Core Features
 
 Since I may abandon some of the features during development (such as depth of field or somewhat sampling), I tested the results by toggling on and off `ENABLE_STREAM_COMPACTION`, `SORT_PATH_BY_MATERIAL` and `CACHE_FIRST_INTERSECTION`, based on this commit: [`core_features`](https://github.com/WindyDarian/Project3-CUDA-Path-Tracer/releases/tag/core_features)
 
@@ -56,7 +55,7 @@ Interestingly, while both `ENABLE_STREAM_COMPACTION` (100) and `SORT_PATH_BY_MAT
 
 __To make things more clear and write a more efficient path tracer, I did some additional tests below before implementing extra features.__
 
-#### Additional Test: Sort paths by sorting indices then reshuffle instead of sorting in place
+### Additional Test: Sort paths by sorting indices then reshuffle instead of sorting in place
 
 > - try to reduce the sorting bottleneck. Maybe instead of directly sorting the structs, sort proxy buffers of ints and then reshuffle the structs? If you want to give this a try, please document your results no matter what you end up with, interesting experiments are always good for your project (and... your grade :O)
 
@@ -97,7 +96,7 @@ As the result shows, with `ENABLE_STREAM_COMPACTION` also enabled, sorting indic
 
 There may be two reasons: 1. expense of sorting; 2. it still costs to move large structs around, even if only once per bounce.
 
-I am thinking about leaving the `PathSegment`s and `ShadeableIntersection`s in place and just use the sorted/compacted indices to access the data (during both sorting stage and compaction stage). That would be the next additional test I do. 
+I am thinking about leaving the `PathSegment`s and `ShadeableIntersection`s in place and just use the sorted/compacted indices to access the data (during both sorting stage and compaction stage). That would be the next additional test I do.
 
 #### Current State
 ![current_screenshot_or_render](/rendered_images/cornell.2016-10-03_04-33-43z.5000samp.png)
