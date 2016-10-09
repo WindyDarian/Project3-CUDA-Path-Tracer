@@ -30,7 +30,7 @@ CUDA Path Tracer
 * compact a pointer array instead of array of not-very-small `PathSegment`s to see if there is any performance increase
 * ~~sort the array of `PathSegment`s by material....~~ or again sort that pointer array?
 * ~~cache first intersection~~
-* Test copy values instead of references for some data (for example intersection of current path segment) at intersection/shading stage
+* ~~Test copy values instead of references for some data (for example intersection of current path segment) at intersection/shading stage~~
 
 ### Performance Test: Core Features
 
