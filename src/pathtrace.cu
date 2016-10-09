@@ -16,9 +16,9 @@
 #include "interactions.h"
 
 // TOGGLE THEM
-#define ENABLE_STREAM_COMPACTION 0
+#define ENABLE_STREAM_COMPACTION 1  // Optimization done: compact a forwarding indices array instead of dev_paths
 #define SORT_PATH_BY_MATERIAL 0
-#define CACHE_FIRST_INTERSECTION 0
+#define CACHE_FIRST_INTERSECTION 1 
 
 #define ERRORCHECK 1
 
@@ -120,7 +120,7 @@ void pathtraceInit(Scene *scene) {
 	cudaMemset(dev_material_ids, 0, pixelcount * sizeof(dev_material_ids[0]));
 
 	cudaMalloc(&reshuffled_dev_paths, pixelcount * sizeof(reshuffled_dev_paths[0]));
-	cudaMalloc(&reshuffled_dev_intersections, pixelcount * sizeof(reshuffled_dev_paths[0]));
+	cudaMalloc(&reshuffled_dev_intersections, pixelcount * sizeof(reshuffled_dev_intersections[0]));
 
 
 	checkCUDAError("pathtraceInit");
@@ -182,11 +182,16 @@ __global__ void computeIntersections(
 	, const Geom * geoms
 	, int geoms_size
 	, int* path_material_ids
+	, int* dev_active_path_indices
 	)
 {
-	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+	int index = blockIdx.x * blockDim.x + threadIdx.x;
 
-	if (path_index >= num_paths) return;
+	if (index >= num_paths) return;
+
+	auto path_index = dev_active_path_indices[index];
+
+	if (path_index < 0) return;
 	
 	auto pathSegment = pathSegments[path_index]; // DONE: ref or not to ref??? - no ref is faster
 
@@ -243,7 +248,7 @@ __global__ void computeIntersections(
 	intersection.materialId = material_id;
 	intersection.surfaceNormal = normal;
 	intersection.intersection_point = intersect_point;
-	path_material_ids[path_index] = material_id;
+	path_material_ids[index] = material_id;
 }
 
 __device__ void shadeAndScatter(
@@ -314,11 +319,14 @@ __global__ void kernShadeScatterAndGatherTerminated(
 	, PathSegment * pathSegments
 	, const ShadeableIntersection * intersections
 	, const Material * materials
-	, glm::vec3* image)
+	, glm::vec3* image
+	, int* active_path_indices)
 {
-	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
+	auto index = blockIdx.x * blockDim.x + threadIdx.x;
 
-	if (path_index >= num_paths) return;
+	if (index >= num_paths) return;
+	auto path_index = active_path_indices[index];
+	if (path_index < 0) return;
 
 	auto& path_segment = pathSegments[path_index]; 
 	if (path_segment.terminated()) return;
@@ -329,6 +337,11 @@ __global__ void kernShadeScatterAndGatherTerminated(
 	shadeAndScatter(path_segment, intersection, material, rng);
 
 	tryGatherPath(image, path_segment);
+
+	if (path_segment.terminated())
+	{
+		active_path_indices[index] = -1;
+	}
 }
 
 //// Add the current iteration's output to the overall image
@@ -366,12 +379,13 @@ __global__ void kernReshufflePaths(
 }
 
 
-struct isPathTerminated
+struct isPathTerminatedForIndex
 {
+
 	__host__ __device__
-		bool operator()(const PathSegment& path_segment)
+		bool operator()(const int& path_index)
 	{
-		return path_segment.terminated();
+		return path_index < 0;
 	}
 };
 
@@ -457,6 +471,7 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 				, dev_geoms
 				, hst_scene->geoms.size()
 				, dev_material_ids
+				, dev_active_path_indices
 			);
 		}
 #if CACHE_FIRST_INTERSECTION
@@ -470,11 +485,10 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 
 #if SORT_PATH_BY_MATERIAL 
 		// DONE: reorder paths by material
-		// DONE: sort indices only
+		// DONE: sort indices only and reshuffle (deleted, see readme for link to older commit), faster than previous method but slower than without sorting 
+		// DONE: sort indices only and use index array to forward query in intersection and shading stages. Faster than both methods above but still slower than without sorting
+		// Conclusion: sorting is costy
 		thrust::sort_by_key(thrust::device, dev_material_ids, dev_material_ids + num_paths_active, dev_active_path_indices);
-		kernReshufflePaths <<<numblocksPathSegmentTracing, blockSize1d>>> (num_paths_active, dev_active_path_indices, dev_paths, dev_intersections, reshuffled_dev_paths, reshuffled_dev_intersections);
-		std::swap(dev_paths, reshuffled_dev_paths);
-		std::swap(dev_intersections, reshuffled_dev_intersections);
 
 #endif
 
@@ -486,13 +500,14 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 			, dev_intersections
 			, dev_materials
 			, dev_image
+			, dev_active_path_indices
 		);
 
 #if ENABLE_STREAM_COMPACTION
 		//auto new_end = thrust::partition(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathAlive()); //slower than thrust::remove_if
 		//num_paths_active = new_end - thrust_dev_paths;
-		auto new_end = thrust::remove_if(thrust::device, dev_paths, dev_paths + num_paths_active, isPathTerminated()); // slower
-		num_paths_active = new_end - dev_paths;
+		auto new_end = thrust::remove_if(thrust::device, dev_active_path_indices, dev_active_path_indices + num_paths_active, isPathTerminatedForIndex()); // slower
+		num_paths_active = new_end - dev_active_path_indices;
 #endif
 		// TODO: compact a pointer array instead to see if there is any performance increase
 

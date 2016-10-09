@@ -18,8 +18,9 @@ CUDA Path Tracer
   * Sorts by material after getting intersections. (Toggleable by changing `SORT_PATH_BY_MATERIAL` in `pathtrace.cu`)
   * Caching first intersections. (Toggleable by changing `CACHE_FIRST_INTERSECTION` in `pathtrace.cu`)
   * Performance tests for core features.
-  * Additional test: sort paths by sorting indices then reshuffle instead of sorting in place
-  * Additional test: access structs in global memory vs copy to local memory first
+  * __Additional test:__ sort paths by sorting indices then reshuffle instead of sorting in place
+  * __Additional test:__ access structs in global memory vs copy to local memory first
+  * __Additional optimization:__ compact index array instead of `PathSegments` array. Raised render speed to __120.6%__ of no stream compaction and __212.9%__ of the approach that directly do stream compaction on `PathSegments` array, see below.
 
 ### TODOs
 
@@ -98,7 +99,7 @@ As the result shows, with `ENABLE_STREAM_COMPACTION` also enabled, sorting indic
 
 There may be two reasons: 1. expense of sorting; 2. it still costs to move large structs around, even if only once per bounce.
 
-I was thinking about leaving the `PathSegment`s and `ShadeableIntersection`s in place and just use the sorted/compacted indices to access the data (during both sorting stage and compaction stage). But the next additional test indicates it might not give a bonus to speed.
+I was thinking about leaving the `PathSegment`s and `ShadeableIntersection`s in place and just use the sorted/compacted indices to access the data (during both sorting stage and compaction stage). But I did a tiny experiment by just sorting the indices array and nothing else... (no reshuffling) It turned out that compared to `26.5557`ips of 000, just sorting an indices array will slow the performance to `17.0504`ips. So, __it may be true that sorting itself is costly__.
 
 ### Additional Test: Access Structs in Global Memory vs Copy to Local Memory First
 
@@ -145,8 +146,35 @@ Yup, copying them to local first is faster in comparison to accessing them direc
 
 I'll leave at copying them to local memory first during the remainder of my assignment.
 
+### __Additional optimization:__ compact index array instead of `PathSegments` array
+I tried to do some stream compaction on index array instead of `PathSegments` array, and forward the threads with the new indices array to find corresponding `PathSegment` on intersection and shading stages. This approach raised render speed to __120.6%__ of no stream compaction and __212.9%__ of the approach that directly do stream compaction on `PathSegments` array, see below. The changes can be found in [`compact_index_array`](https://github.com/WindyDarian/Project3-CUDA-Path-Tracer/releases/tag/compact_index_array) tag.
 
-#### Current State
+This is done by changing:
+```C++
+auto new_end = thrust::remove_if(thrust::device, dev_paths, dev_paths + num_paths_active, isPathTerminated());
+num_paths_active = new_end - dev_paths;
+```
+
+```c++
+auto new_end = thrust::remove_if(thrust::device, dev_active_path_indices, dev_active_path_indices + num_paths_active, isPathTerminatedForIndex()); // slower
+num_paths_active = new_end - dev_active_path_indices;
+...
+// in intersection and shading stages
+    path_index = indices[index];
+...
+```
+
+| Test Case Id                                                 | ENABLE_STREAM_COMPACTION | SORT_PATH_BY_MATERIAL | CACHE_FIRST_INTERSECTION | Time for 5000 iterations (s) | Iterations per second |
+|--------------------------------------------------------------|--------------------------|-----------------------|--------------------------|------------------------------|-----------------------|
+| 000                                                          | OFF                      | OFF                   | OFF                      | 188.283                      | 26.5557               |
+| 100                                                          | ON                       | OFF                   | OFF                      | 332.301                      | 15.0466               |
+| 100*** - compact index array instead of `PathSegments` array | ON                       | OFF                   | OFF                      | 156.11                       | 32.0286               |
+
+![chart_compact_index_array](/test_results/chart_compact_index_array.png)
+
+So, I have proven __both sorting and moving large structs are costly__, I decided to go without sorting but with index compaction for the remainder of this project (If I decided not to do Wavefront Pathtracer).
+
+### Current State
 ![current_screenshot_or_render](/rendered_images/cornell.2016-10-03_04-33-43z.5000samp.png)
 
 

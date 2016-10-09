@@ -1,3 +1,0 @@
-#include "wavefront.h"
-
-// placeholder
