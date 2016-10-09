@@ -9,29 +9,20 @@ CUDA Path Tracer
   * Visual Studio 2015 + CUDA 8.0 on Windows
   * gcc/g++ 5.4 + CUDA 8.0 on Ubuntu
 
+![current_screenshot_or_render](/screenshots/screenshot_current.jpg)
+
 ### Things I have done
 
 * Basics:
   * Path tracing diffusive and perfect specular materials
   * Original __glfw3__ lib files doesn't support __Visual Studio 2015__. I updated __glfw3__ and put the source version into the `external/` folder and configured `CMakeLists.txt` so it becomes compatible with __Visual Studio 2015__ while can also build on other compilers supported. Also upgraded CMake __FindCuda__ module to solve linker errors in CUDA 8.
-  * Used `thrust::remove_if` to compact the path segment array... but only to find that __the rendering speed after stream compaction is SLOWER__. Not yet tested the data in details, but I doubt it is due to the cost of moving `PathSegments` around. I plan to build a 0/1 array according to the termination state of the path segment array and scan/compact the 0/1 array to get an index array for forwarding the threads instead
-  * Sorts by material after getting intersections. (Toggleable by changing `SORT_PATH_BY_MATERIAL` in `pathtrace.cu`)
+  * Used `thrust::remove_if` to compact the path segment array... but only to find that __the rendering speed after stream compaction on structs is slower__. However I did some optimization and did stream compaction on an index array, and keep the original array in place... Now it is faster than without compaction. 
+  * Sorts by material after getting intersections... but results are __much slower__. (Toggleable by changing `SORT_PATH_BY_MATERIAL` in `pathtrace.cu`)
   * Caching first intersections. (Toggleable by changing `CACHE_FIRST_INTERSECTION` in `pathtrace.cu`)
   * Performance tests for core features.
   * __Additional test:__ sort paths by sorting indices then reshuffle instead of sorting in place
   * __Additional test:__ access structs in global memory vs copy to local memory first
   * __Additional optimization:__ compact index array instead of `PathSegments` array. Raised render speed to __120.6%__ of no stream compaction and __212.9%__ of the approach that directly do stream compaction on `PathSegments` array, see below.
-
-### TODOs
-
-* ~~Path tracing diffusive materials~~
-* ~~Fix float number precision error~~
-* ~~Perfect specular materials~~
-* ~~Stream compaction~~
-* compact a pointer array instead of array of not-very-small `PathSegment`s to see if there is any performance increase
-* ~~sort the array of `PathSegment`s by material....~~ or again sort that pointer array?
-* ~~cache first intersection~~
-* ~~Test copy values instead of references for some data (for example intersection of current path segment) at intersection/shading stage~~
 
 ### Performance Test: Core Features
 
@@ -175,8 +166,7 @@ num_paths_active = new_end - dev_active_path_indices;
 So, I have proven __both sorting and moving large structs are costly__, I decided to go without sorting but with index compaction for the remainder of this project (If I decided not to do Wavefront Pathtracer).
 
 ### Current State
-![current_screenshot_or_render](/rendered_images/cornell.2016-10-03_04-33-43z.5000samp.png)
-
+![current_screenshot_or_render](/screenshots/screenshot_current.jpg)
 
 #### That is what I started from
 ![begin_screenshot](/screenshots/screenshot_begin.png)
