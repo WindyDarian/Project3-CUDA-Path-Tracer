@@ -54,9 +54,50 @@ The results are as follows (tested with default "cornell.txt" scene, with diffus
 
 Interestingly, while both `ENABLE_STREAM_COMPACTION` (100) and `SORT_PATH_BY_MATERIAL` (010) are slower than the naive way (000), enabling them both (110) is faster than enabling `SORT_PATH_BY_MATERIAL` (010) only. That is because enabling stream compaction reduces a lot work of sorting.
 
-#### Additional Core Feature Tests
+__To make things more clear and write a more efficient path tracer, I did some additional tests below before implementing extra features.__
 
-Doing it.
+#### Additional Test: Sort paths by sorting indices then reshuffle instead of sorting in place
+
+> - try to reduce the sorting bottleneck. Maybe instead of directly sorting the structs, sort proxy buffers of ints and then reshuffle the structs? If you want to give this a try, please document your results no matter what you end up with, interesting experiments are always good for your project (and... your grade :O)
+
+I made an experimental change at this tag: [`sort_indices_rather_than_structs`](https://github.com/WindyDarian/Project3-CUDA-Path-Tracer/releases/tag/sort_indices_rather_than_structs) . Instead of sorting the `PathSegment` and `ShadeableIntersection` structs directly, I created an array of indices and sorted it instead, and then reshuffled the path segments by new indices. Core changes I have made was:
+
+```
+#if SORT_PATH_BY_MATERIAL
+		thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths_active, dev_paths, compMaterialId());
+#endif
+```
+
+to:
+
+```
+#if SORT_PATH_BY_MATERIAL
+		// DONE: reorder paths by material
+		// DONE: sort indices only
+		thrust::sort_by_key(thrust::device, dev_material_ids, dev_material_ids + num_paths_active, dev_active_path_indices);
+		kernReshufflePaths <<<numblocksPathSegmentTracing, blockSize1d>>> (num_paths_active, dev_active_path_indices, dev_paths, dev_intersections, reshuffled_dev_paths, reshuffled_dev_intersections);
+		std::swap(dev_paths, reshuffled_dev_paths);
+		std::swap(dev_intersections, reshuffled_dev_intersections);
+
+#endif
+```
+
+(`dev_active_path_indices` and `dev_material_ids` are to int array buffers I introduced)
+
+| Test Case Id                    | ENABLE_STREAM_COMPACTION | SORT_PATH_BY_MATERIAL | CACHE_FIRST_INTERSECTION | Time for 5000 iterations (s) | Iterations per second |
+|---------------------------------|--------------------------|-----------------------|--------------------------|------------------------------|-----------------------|
+| 000                             | OFF                      | OFF                   | OFF                      | 188.283                      | 26.5557               |
+| 100                             | ON                       | OFF                   | OFF                      | 332.301                      | 15.0466               |
+| 110                             | ON                       | ON                    | OFF                      | 970.748                      | 5.15067               |
+| 110* - sort indices and shuffle | ON                       | ON                    | OFF                      | 510.159                      | 9.80087               |
+
+![chart_sort_indices_by_material_and_reshuffle](/test_results/chart_sort_indices_by_material_and_reshuffle.png)
+
+As the result shows, with `ENABLE_STREAM_COMPACTION` also enabled, sorting indices by material and reshuffle (110*) is significantly faster than directly sorting the structs. BUT it is still slower than the approaches without sorting by materials (naive or stream compaction only).
+
+There may be two reasons: 1. expense of sorting; 2. it still costs to move large structs around, even if only once per bounce.
+
+I am thinking about leaving the `PathSegment`s and `ShadeableIntersection`s in place and just use the sorted/compacted indices to access the data (during both sorting stage and compaction stage). That would be the next additional test I do. 
 
 #### Current State
 ![current_screenshot_or_render](/rendered_images/cornell.2016-10-03_04-33-43z.5000samp.png)

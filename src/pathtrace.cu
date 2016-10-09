@@ -20,7 +20,7 @@
 // TOGGLE THEM
 #define ENABLE_STREAM_COMPACTION 1
 #define SORT_PATH_BY_MATERIAL 1
-#define CACHE_FIRST_INTERSECTION 1
+#define CACHE_FIRST_INTERSECTION 0
 
 #define ERRORCHECK 1
 
@@ -83,6 +83,11 @@ PathSegment * dev_paths = nullptr;
 ShadeableIntersection * dev_intersections = nullptr;
 ShadeableIntersection * dev_cached_first_intersections = nullptr;
 bool first_intersection_cached = false;
+int* dev_active_path_indices = nullptr;
+int* dev_material_ids = nullptr; // used for sorting indices array without passing in comparsion functions (thus we can take advantage of thrust's radix sort optimization?)
+
+PathSegment * reshuffled_dev_paths = nullptr;
+ShadeableIntersection * reshuffled_dev_intersections = nullptr;
 
 // TODO: static variables for device memory, any extra info you need, etc
 // ...
@@ -111,6 +116,14 @@ void pathtraceInit(Scene *scene) {
 	first_intersection_cached = false;
 
 	// TODO: initialize any extra device memeory you need
+	cudaMalloc(&dev_active_path_indices, pixelcount * sizeof(dev_active_path_indices[0]));
+	cudaMemset(dev_active_path_indices, 0, pixelcount * sizeof(dev_active_path_indices[0]));
+	cudaMalloc(&dev_material_ids, pixelcount * sizeof(dev_material_ids[0]));
+	cudaMemset(dev_material_ids, 0, pixelcount * sizeof(dev_material_ids[0]));
+
+	cudaMalloc(&reshuffled_dev_paths, pixelcount * sizeof(reshuffled_dev_paths[0]));
+	cudaMalloc(&reshuffled_dev_intersections, pixelcount * sizeof(reshuffled_dev_paths[0]));
+
 
 	checkCUDAError("pathtraceInit");
 }
@@ -123,6 +136,10 @@ void pathtraceFree() {
 	cudaFree(dev_intersections);
 	cudaFree(dev_cached_first_intersections);
 	// TODO: clean up any extra device memory you created
+	cudaFree(dev_active_path_indices);
+	cudaFree(dev_material_ids);
+	cudaFree(reshuffled_dev_paths);
+	cudaFree(reshuffled_dev_intersections);
 
 	checkCUDAError("pathtraceFree");
 }
@@ -135,7 +152,7 @@ void pathtraceFree() {
 * motion blur - jitter rays "in time"
 * lens effect - jitter ray origin positions based on a lens
 */
-__global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments)
+__global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, PathSegment* pathSegments, int* path_indices)
 {
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
@@ -155,6 +172,8 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
+
+		path_indices[index] = index;
 	}
 }
 
@@ -164,6 +183,7 @@ __global__ void computeIntersections(
 	, ShadeableIntersection * intersections
 	, const Geom * geoms
 	, int geoms_size
+	, int* path_material_ids
 	)
 {
 	int path_index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -216,6 +236,7 @@ __global__ void computeIntersections(
 	{
 		intersection.t = -1.0f;
 		intersection.materialId = -1; // for sorting by material
+		path_material_ids[path_index] = -1;
 		return;
 	}
 
@@ -224,7 +245,7 @@ __global__ void computeIntersections(
 	intersection.materialId = material_id;
 	intersection.surfaceNormal = normal;
 	intersection.intersection_point = intersect_point;
-	
+	path_material_ids[path_index] = material_id;
 }
 
 __device__ void shadeAndScatter(
@@ -327,25 +348,25 @@ __global__ void kernShadeScatterAndGatherTerminated(
 //		}
 //	}
 //}
-
-
-//struct isPathAlive
-//{
-//	__host__ __device__
-//		bool operator()(const PathSegment& path_segment)
-//	{
-//		return !path_segment.terminated();
-//	}
-//};
-
-struct compMaterialId
+__global__ void kernReshufflePaths(
+	 int num_paths
+	, int* indices
+	, PathSegment * path_segments
+	, ShadeableIntersection * intersections
+	, PathSegment * new_paths
+	, ShadeableIntersection * new_intersections
+	)
 {
-	__host__ __device__ 
-		bool operator() (const ShadeableIntersection& a, const ShadeableIntersection& b)
-	{
-		return a.materialId < b.materialId;  // legimate because I gave a -1 to materialId if there is no intersection
-	}
-};
+	auto path_index = blockIdx.x * blockDim.x + threadIdx.x;
+
+	if (path_index >= num_paths) return;
+
+	auto old_index = indices[path_index];
+	new_paths[path_index] = path_segments[old_index];
+	new_intersections[path_index] = intersections[old_index];
+	indices[path_index] = path_index;
+}
+
 
 struct isPathTerminated
 {
@@ -353,16 +374,6 @@ struct isPathTerminated
 		bool operator()(const PathSegment& path_segment)
 	{
 		return path_segment.terminated();
-	}
-};
-
-// what if I just compact a pointer array?
-struct isPointedPathTerminated
-{
-	__host__ __device__
-		bool operator()(const PathSegment* path_segment_p)
-	{
-		return path_segment_p->terminated();
 	}
 };
 
@@ -415,7 +426,7 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 
 	// TODO: perform one iteration of path tracing
 
-	generateRayFromCamera <<<blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths);
+	generateRayFromCamera <<<blocksPerGrid2d, blockSize2d >> > (cam, iter, traceDepth, dev_paths, dev_active_path_indices);
 	checkCUDAError("generate camera ray");
 
 	int depth = 0;
@@ -447,6 +458,7 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 				, dev_intersections
 				, dev_geoms
 				, hst_scene->geoms.size()
+				, dev_material_ids
 			);
 		}
 #if CACHE_FIRST_INTERSECTION
@@ -460,8 +472,12 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 
 #if SORT_PATH_BY_MATERIAL 
 		// DONE: reorder paths by material
-		// TODO: sort pointers only
-		thrust::sort_by_key(thrust::device, dev_intersections, dev_intersections + num_paths_active, dev_paths, compMaterialId());
+		// DONE: sort indices only
+		thrust::sort_by_key(thrust::device, dev_material_ids, dev_material_ids + num_paths_active, dev_active_path_indices);
+		kernReshufflePaths <<<numblocksPathSegmentTracing, blockSize1d>>> (num_paths_active, dev_active_path_indices, dev_paths, dev_intersections, reshuffled_dev_paths, reshuffled_dev_intersections);
+		std::swap(dev_paths, reshuffled_dev_paths);
+		std::swap(dev_intersections, reshuffled_dev_intersections);
+
 #endif
 
 		kernShadeScatterAndGatherTerminated <<<numblocksPathSegmentTracing, blockSize1d>>> (
