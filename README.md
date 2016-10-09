@@ -17,7 +17,8 @@ CUDA Path Tracer
   * Used `thrust::remove_if` to compact the path segment array... but only to find that __the rendering speed after stream compaction is SLOWER__. Not yet tested the data in details, but I doubt it is due to the cost of moving `PathSegments` around. I plan to build a 0/1 array according to the termination state of the path segment array and scan/compact the 0/1 array to get an index array for forwarding the threads instead
   * Sorts by material after getting intersections. (Toggleable by changing `SORT_PATH_BY_MATERIAL` in `pathtrace.cu`)
   * Caching first intersections. (Toggleable by changing `CACHE_FIRST_INTERSECTION` in `pathtrace.cu`)
-  * Time measurement.
+  * Performance tests for core features.
+  * Additional test: sort paths by sorting indices then reshuffle instead of sorting in place
 
 ### TODOs
 
@@ -55,7 +56,7 @@ Interestingly, while both `ENABLE_STREAM_COMPACTION` (100) and `SORT_PATH_BY_MAT
 
 __To make things more clear and write a more efficient path tracer, I did some additional tests below before implementing extra features.__
 
-### Additional Test: Sort paths by sorting indices then reshuffle instead of sorting in place
+### Additional Test: Sort Paths by Sorting Indices Then Reshuffle Instead of Sorting in Place
 
 > - try to reduce the sorting bottleneck. Maybe instead of directly sorting the structs, sort proxy buffers of ints and then reshuffle the structs? If you want to give this a try, please document your results no matter what you end up with, interesting experiments are always good for your project (and... your grade :O)
 
