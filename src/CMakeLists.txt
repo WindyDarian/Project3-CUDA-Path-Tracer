@@ -15,6 +15,10 @@ set(SOURCE_FILES
     "preview.cpp"
     "utilities.cpp"
     "utilities.h"
+    "stream_compaction.cu"
+    "stream_compaction.h"
+    "wavefront.cu"
+    "Wavefront.h"
     )
 
 cuda_add_library(src

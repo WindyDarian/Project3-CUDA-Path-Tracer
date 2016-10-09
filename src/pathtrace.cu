@@ -6,7 +6,6 @@
 #include <thrust/execution_policy.h>
 #include <thrust/random.h>
 #include <thrust/remove.h>
-#include <thrust/device_ptr.h>
 
 #include "sceneStructs.h"
 #include "scene.h"
@@ -15,7 +14,6 @@
 #include "utilities.h"
 #include "intersections.h"
 #include "interactions.h"
-#include "stream_compaction/efficient.h"
 
 // TOGGLE THEM
 #define ENABLE_STREAM_COMPACTION 0
@@ -327,7 +325,7 @@ __global__ void kernShadeScatterAndGatherTerminated(
 	
 	auto intersection = intersections[path_index]; 
 	auto material = materials[intersection.materialId];   // DONE: compare speed between ref and value, one in shadeAndScatter also
-	auto rng = makeSeededRandomEngine(iter, path_index, depth); // TODO: iter
+	auto rng = makeSeededRandomEngine(iter, path_index, depth); 
 	shadeAndScatter(path_segment, intersection, material, rng);
 
 	tryGatherPath(image, path_segment);
