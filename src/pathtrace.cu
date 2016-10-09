@@ -18,8 +18,8 @@
 #include "stream_compaction/efficient.h"
 
 // TOGGLE THEM
-#define ENABLE_STREAM_COMPACTION 1
-#define SORT_PATH_BY_MATERIAL 1
+#define ENABLE_STREAM_COMPACTION 0
+#define SORT_PATH_BY_MATERIAL 0
 #define CACHE_FIRST_INTERSECTION 0
 
 #define ERRORCHECK 1
@@ -190,7 +190,7 @@ __global__ void computeIntersections(
 
 	if (path_index >= num_paths) return;
 	
-	auto& pathSegment = pathSegments[path_index]; // TODO: ref or not to ref???
+	auto pathSegment = pathSegments[path_index]; // DONE: ref or not to ref??? - no ref is faster
 
 	if (pathSegment.terminated()) return;
 
@@ -207,7 +207,7 @@ __global__ void computeIntersections(
 	// naive parse through global geoms
 	for (int i = 0; i < geoms_size; i++)
 	{
-		auto& geom = geoms[i];
+		auto geom = geoms[i];
 
 		if (geom.type == CUBE)
 		{
@@ -325,8 +325,8 @@ __global__ void kernShadeScatterAndGatherTerminated(
 	auto& path_segment = pathSegments[path_index]; 
 	if (path_segment.terminated()) return;
 	
-	auto& intersection = intersections[path_index]; // TODO: by ref or get a copy?
-	auto& material = materials[intersection.materialId];   // TODO: compare speed between ref and value, one in shadeAndScatter also
+	auto intersection = intersections[path_index]; 
+	auto material = materials[intersection.materialId];   // DONE: compare speed between ref and value, one in shadeAndScatter also
 	auto rng = makeSeededRandomEngine(iter, path_index, depth); // TODO: iter
 	shadeAndScatter(path_segment, intersection, material, rng);
 

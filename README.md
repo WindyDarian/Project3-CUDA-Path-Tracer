@@ -19,6 +19,7 @@ CUDA Path Tracer
   * Caching first intersections. (Toggleable by changing `CACHE_FIRST_INTERSECTION` in `pathtrace.cu`)
   * Performance tests for core features.
   * Additional test: sort paths by sorting indices then reshuffle instead of sorting in place
+  * Additional test: access structs in global memory vs copy to local memory first
 
 ### TODOs
 
@@ -97,7 +98,53 @@ As the result shows, with `ENABLE_STREAM_COMPACTION` also enabled, sorting indic
 
 There may be two reasons: 1. expense of sorting; 2. it still costs to move large structs around, even if only once per bounce.
 
-I am thinking about leaving the `PathSegment`s and `ShadeableIntersection`s in place and just use the sorted/compacted indices to access the data (during both sorting stage and compaction stage). That would be the next additional test I do.
+I was thinking about leaving the `PathSegment`s and `ShadeableIntersection`s in place and just use the sorted/compacted indices to access the data (during both sorting stage and compaction stage). But the next additional test indicates it might not give a bonus to speed.
+
+### Additional Test: Access Structs in Global Memory vs Copy to Local Memory First
+
+In both intersection and shading stage there are a lot of objects in global memory that needn't to be changed but was accessed. For example, `pathSegment` and `geom` in `computeIntersections`... When I started working on the project I naively change them from copying value to storing a reference...
+
+But I decided to change them back and do some tests. For science. The commit is marked with this tag: [`copy_and_local_access_vs_global_access`](https://github.com/WindyDarian/Project3-CUDA-Path-Tracer/releases/tag/copy_and_local_access_vs_global_access)
+
+In `computeIntersections()`, from:
+```
+auto& pathSegment = pathSegments[path_index];
+...
+    auto& geom = geoms[i];
+```
+
+To:
+```
+auto pathSegment = pathSegments[path_index];
+...
+    auto geom = geoms[i];
+```
+
+In `kernShadeScatterAndGatherTerminated()`, from:
+```
+auto& intersection = intersections[path_index];
+auto& material = materials[intersection.materialId];
+```
+
+To:
+```
+auto intersection = intersections[path_index];
+auto material = materials[intersection.materialId];
+```
+
+Here is the result:
+
+| Test Case Id                               | ENABLE_STREAM_COMPACTION | SORT_PATH_BY_MATERIAL | CACHE_FIRST_INTERSECTION | Time for 5000 iterations (s) | Iterations per second |
+|--------------------------------------------|--------------------------|-----------------------|--------------------------|------------------------------|-----------------------|
+| 000                                        | OFF                      | OFF                   | OFF                      | 188.283                      | 26.5557               |
+| 000** - copy structs to local memory first | OFF                      | OFF                   | OFF                      | 171.12                       | 29.2193               |
+
+![chart_copy_and_access_structs_vs_access_global](/test_results/chart_copy_and_access_structs_vs_access_global.png)
+
+Yup, copying them to local first is faster in comparison to accessing them directly in global memory... at least for their size.
+
+I'll leave at copying them to local memory first during the remainder of my assignment.
+
 
 #### Current State
 ![current_screenshot_or_render](/rendered_images/cornell.2016-10-03_04-33-43z.5000samp.png)
