@@ -80,6 +80,21 @@ int main(int argc, char** argv) {
     return 0;
 }
 
+void timerStart()
+{
+	time_start = std::chrono::high_resolution_clock::now();
+}
+
+void timerPrint()
+{
+	time_end = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double> duro = time_end - time_start;
+	auto time_elapsed = duro.count();
+	double iterations_per_sec = time_elapsed > 0 ? iteration / time_elapsed : renderState->iterations;
+	std::cout << iteration << " iterations in " << time_elapsed << " seconds, iterations per sec: " << iterations_per_sec << std::endl;
+	std::cout << std::endl;
+}
+
 void saveImage() {
     float samples = iteration;
     // output image file
@@ -122,8 +137,8 @@ void runCuda() {
         cameraPosition += cam.lookAt;
         cam.position = cameraPosition;
         camchanged = false;
-		
-		time_start = std::chrono::high_resolution_clock::now();
+
+		timerStart();
       }
 
     // Map OpenGL buffer object for writing from CUDA on a single GPU
@@ -146,13 +161,7 @@ void runCuda() {
         // unmap buffer object
         cudaGLUnmapBufferObject(pbo);
     } else {
-		time_end = std::chrono::high_resolution_clock::now();
-		std::chrono::duration<double> duro = time_end - time_start;
-		auto time_elapsed = duro.count();
-		double iterations_per_sec = time_elapsed > 0 ? renderState->iterations / time_elapsed : renderState->iterations;
-		std::cout << renderState->iterations << " iterations in " << time_elapsed << " seconds, iterations per sec: " << iterations_per_sec << std::endl;
-		std::cout << std::endl;
-
+		timerPrint();
         saveImage();
         pathtraceFree();
         cudaDeviceReset();
@@ -168,6 +177,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
         glfwSetWindowShouldClose(window, GL_TRUE);
         break;
       case GLFW_KEY_S:
+		  timerPrint();
         saveImage();
         break;
       case GLFW_KEY_SPACE:

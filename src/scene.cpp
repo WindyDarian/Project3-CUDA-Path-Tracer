@@ -1,15 +1,19 @@
 #include <iostream>
 #include "scene.h"
 #include <cstring>
+#include <string>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <tiny_obj_loader.h>
 
 using std::string;
 using std::cout;
 using std::endl;
 using std::vector;
 
-Scene::Scene(string filename) {
+Scene::Scene(string filename)
+	: path(filename)
+{
     cout << "Reading scene from " << filename << " ..." << endl;
     cout << " " << endl;
     char* fname = (char*)filename.c_str();
@@ -37,6 +41,11 @@ Scene::Scene(string filename) {
     }
 }
 
+std::string findFolderName(const std::string& str)
+{
+	return str.substr(0, str.find_last_of("/\\"));
+}
+
 int Scene::loadGeom(string objectid) {
     int id = atoi(objectid.c_str());
     if (id != geoms.size()) {
@@ -46,17 +55,22 @@ int Scene::loadGeom(string objectid) {
         cout << "Loading Geom " << id << "..." << endl;
         Geom newGeom;
         string line;
+		bool is_mesh = false;
 
         //load object type
         utilityCore::safeGetline(fp_in, line);
         if (!line.empty() && fp_in.good()) {
             if (strcmp(line.c_str(), "sphere") == 0) {
                 cout << "Creating new sphere..." << endl;
-                newGeom.type = SPHERE;
+                newGeom.type = GeomType::SPHERE;
             } else if (strcmp(line.c_str(), "cube") == 0) {
                 cout << "Creating new cube..." << endl;
-                newGeom.type = CUBE;
-            }
+                newGeom.type = GeomType::CUBE;
+            } else if (strcmp(line.c_str(), "mesh") == 0) { // mesh
+				cout << "Creating new mesh..." << endl;
+				newGeom.type = GeomType::MESH;
+				is_mesh = true;
+			}
         }
 
         //link material
@@ -79,8 +93,14 @@ int Scene::loadGeom(string objectid) {
                 newGeom.rotation = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
             } else if (strcmp(tokens[0].c_str(), "SCALE") == 0) {
                 newGeom.scale = glm::vec3(atof(tokens[1].c_str()), atof(tokens[2].c_str()), atof(tokens[3].c_str()));
-            }
-
+			} else if (is_mesh && strcmp(tokens[0].c_str(), "FILE") == 0)
+			{
+				auto model_folder = findFolderName(path);
+				auto model_file_name = tokens[1].c_str();
+				auto path = model_folder + '/' + model_file_name;
+				cout << "Loading Model From " << path << endl;
+				loadMesh(path, newGeom);
+			}
             utilityCore::safeGetline(fp_in, line);
         }
 
@@ -153,6 +173,57 @@ int Scene::loadCamera() {
 
     cout << "Loaded camera!" << endl;
     return 1;
+}
+
+constexpr float float_min = std::numeric_limits<float>::max();
+constexpr float float_max = std::numeric_limits<float>::lowest();
+
+void Scene::loadMesh(const std::string& model_path, Geom& geom)
+{
+	tinyobj::attrib_t attrib;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+	std::string err;
+
+	if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &err, model_path.c_str()))
+	{
+		throw std::runtime_error(err);
+	}
+	glm::vec3 min_pos(float_min);
+	glm::vec3 max_pos(float_max);
+	geom.vertices_begin_index = vertices.size();
+	for (const auto& shape : shapes)
+	{
+		for (const auto& index : shape.mesh.indices)
+		{
+			glm::vec3 pos = {
+				attrib.vertices[3 * index.vertex_index + 0],
+				attrib.vertices[3 * index.vertex_index + 1],
+				attrib.vertices[3 * index.vertex_index + 2]
+			};
+
+			glm::vec3 normal = {
+				attrib.normals[3 * index.normal_index + 0],
+				attrib.normals[3 * index.normal_index + 1],
+				attrib.normals[3 * index.normal_index + 2]
+			};
+
+			//vertex.tex_coord = {
+			//	attrib.texcoords[2 * index.texcoord_index + 0],
+			//	attrib.texcoords[2 * index.texcoord_index + 1]
+			//};
+
+			vertices.emplace_back(pos, normal);
+			for (auto i = 0; i < 3; i++)
+			{
+				min_pos[i] = std::min(pos[i], min_pos[i]);
+				max_pos[i] = std::max(pos[i], max_pos[i]);
+			}
+		}
+	}
+	geom.vertices_count = vertices.size() - geom.vertices_begin_index;
+	geom.bounding_box_min = min_pos;
+	geom.bounding_box_max = max_pos;
 }
 
 int Scene::loadMaterial(string materialid) {

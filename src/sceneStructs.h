@@ -7,9 +7,10 @@
 
 #define BACKGROUND_COLOR (glm::vec3(0.0f))
 
-enum GeomType {
-    SPHERE,
-    CUBE,
+enum class GeomType {
+	SPHERE,
+	CUBE,
+	MESH
 };
 
 struct Ray {
@@ -18,7 +19,7 @@ struct Ray {
 };
 
 struct Geom {
-    enum GeomType type;
+    GeomType type;
     int materialid;
     glm::vec3 translation;
     glm::vec3 rotation;
@@ -26,6 +27,21 @@ struct Geom {
     glm::mat4 transform;
     glm::mat4 inverseTransform;
     glm::mat4 invTranspose;
+	int vertices_begin_index;
+	int vertices_count;
+	glm::vec3 bounding_box_min; // only used for meshes atm
+	glm::vec3 bounding_box_max;
+};
+
+struct Vertex 
+{
+	glm::vec3 position;
+	glm::vec3 normal;
+	// glm::vec2 uv
+	Vertex(const glm::vec3& position, const glm::vec3& normal)
+		: position(position)
+		, normal(normal)
+	{}
 };
 
 struct Material {
