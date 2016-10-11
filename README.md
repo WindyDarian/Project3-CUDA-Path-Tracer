@@ -5,16 +5,22 @@ CUDA Path Tracer
 
 * Ruoyu Fan
 * Tested on:
-  * Windows 10 x64 / Ubuntu 16.04 x64, i7-4720HQ @ 2.60GHz, 16GB Memory, GTX 970M 3072MB (personal laptop)
-  * Visual Studio 2015 + CUDA 8.0 on Windows
+  * Windows 10 x64, i7-4720HQ @ 2.60GHz, 16GB Memory, GTX 970M 3072MB (personal laptop)
+  * Visual Studio 2015 + CUDA 8.0
 
 __Additional third-party library used:__ tinyobjloader by syoyo (http://syoyo.github.io/tinyobjloader/)
 
+preview  | preview
+:-------------------------:|:-------------------------:
+![preview](/screenshots/preview.gif)  |  ![preview2](/rendered_images/preview.png)
+
 ![current_screenshot_or_render](/screenshots/screenshot_current.jpg)
 
-![red_dragon](/rendered_images/red_dragon.png)
+flat shading  | smooth_shading
+:-------------------------:|:-------------------------:
+![](/rendered_images/true_glass_dragon.png)  |  ![](/rendered_images/true_glass_dragon_smooth.png)
 
-(The dragon is... without Stochastic Sampled Antialiasing because... I don't have time to render it again before deadline (after one lateday)...)
+![red_dragon](/rendered_images/red_dragon.png)
 
 
 ### Things I have done
@@ -193,7 +199,9 @@ FILE        dragon.obj
 
 If the vertex normal is different from triangle normal, my ray-triangle intersection can give interpolated normal (aka smooth shading).
 
-![glass_dragon](/rendered_images/glass_dragon.png)
+flat shading  | smooth_shading
+:-------------------------:|:-------------------------:
+![](/rendered_images/true_glass_dragon.png)  |  ![](/rendered_images/true_glass_dragon_smooth.png)
 
 ![red_dragon](/rendered_images/red_dragon.png)
 
@@ -226,12 +234,14 @@ Not much difference
 The reflection on the ball is smoother.
 
 #### Refrative Material
-rendering!!
+[refractive](/rendered_images/cornell_refractive.png)
+
+The indices of refraction of the front balls are 1.31 (ice), 1.62 (glass?), 2.614 (titanium dioxide) (from left to right)
+
+The pink ball is 10% perfect specular, 60% refraction (ior: 1.66), 30% diffusive.
 
 ### Current State
 ![current_screenshot_or_render](/screenshots/screenshot_current.jpg)
-
-![red_dragon](/rendered_images/red_dragon.png)
 
 #### That is what I started from
 ![begin_screenshot](/screenshots/screenshot_begin.png)
