@@ -9,20 +9,30 @@ CUDA Path Tracer
   * Visual Studio 2015 + CUDA 8.0 on Windows
   * gcc/g++ 5.4 + CUDA 8.0 on Ubuntu
 
+__Additional third-party library used:__ tinyobjloader by syoyo (http://syoyo.github.io/tinyobjloader/)
+
 ![current_screenshot_or_render](/screenshots/screenshot_current.jpg)
+
+![red_dragon](/rendered_images/red_dragon.png)
+
 
 ### Things I have done
 
 * Basics:
   * Path tracing diffusive and perfect specular materials
   * Original __glfw3__ lib files doesn't support __Visual Studio 2015__. I updated __glfw3__ and put the source version into the `external/` folder and configured `CMakeLists.txt` so it becomes compatible with __Visual Studio 2015__ while can also build on other compilers supported. Also upgraded CMake __FindCuda__ module to solve linker errors in CUDA 8.
-  * Used `thrust::remove_if` to compact the path segment array... but only to find that __the rendering speed after stream compaction on structs is slower__. However I did some optimization and did stream compaction on an index array, and keep the original array in place... Now it is faster than without compaction. 
+  * Used `thrust::remove_if` to compact the path segment array... but only to find that __the rendering speed after stream compaction on structs is slower__. However I did some optimization and did stream compaction on an index array, and keep the original array in place... Now it is faster than without compaction.
   * Sorts by material after getting intersections... but results are __much slower__. (Toggleable by changing `SORT_PATH_BY_MATERIAL` in `pathtrace.cu`)
   * Caching first intersections. (Toggleable by changing `CACHE_FIRST_INTERSECTION` in `pathtrace.cu`)
   * Performance tests for core features.
-  * __Additional test:__ sort paths by sorting indices then reshuffle instead of sorting in place
-  * __Additional test:__ access structs in global memory vs copy to local memory first
-  * __Additional optimization:__ compact index array instead of `PathSegments` array. Raised render speed to __120.6%__ of no stream compaction and __212.9%__ of the approach that directly do stream compaction on `PathSegments` array, see below.
+  * Additional test: sort paths by sorting indices then reshuffle instead of sorting in place
+  * Additional test: access structs in global memory vs copy to local memory first
+  * Additional optimization: compact index array instead of `PathSegments` array. Raised render speed to __120.6%__ of no stream compaction and __212.9%__ of the approach that directly do stream compaction on `PathSegments` array, see below.
+
+* Features:
+  * Loading obj model (with tinyobjloader). If the vertex normal is different from triangle normal, my ray-triangle intersection can give interpolated normal (aka smooth shading).
+  * Refraction with Frensel effects
+  * Stochastic Sampled Antialiasing
 
 ### Performance Test: Core Features
 
@@ -165,8 +175,33 @@ num_paths_active = new_end - dev_active_path_indices;
 
 So, I have proven __both sorting and moving large structs are costly__, I decided to go without sorting but with index compaction for the remainder of this project (If I decided not to do Wavefront Pathtracer).
 
+### Feature: OBJ model loading
+
+I enabled obj model loading feature with tinyobjloader.
+
+![glass_dragon](/rendered_images/glass_dragon.png)
+
+![red_dragon](/rendered_images/red_dragon.png)
+
+If the vertex normal is different from triangle normal, my ray-triangle intersection can give interpolated normal (aka smooth shading).
+
+During loading stage, a bounding box is generated for the model. It can be toggled on and off by `ENABLE_MESH_BBOX` macro in `intersections.h`.
+
+However... I found that enabling bounding box or not doesn't have much effect on the rendering time.
+
+It took me __4452.84 seconds__ to render the image below (~1750 triangles, my previous dragon model) __without bounding box__, which is __1.12288 iterations per second__.
+
+![glass_dragon](/rendered_images/glass_dragon.png)
+
+It took me __89.0504 seconds__ to render the same image with bounding box for 101 iterations (I terminated it on 101 samples), which is __1.13419 iterations per second__.
+
+It is not efficient is because, in my opinion, my dragon has big wings, and it has a fairly large bounding box. __If any thread in a memory block hits the bounding box, the whole block needs to wait until it is finished.__ I guess I need to sort the ray, use a better path tracing model, or use a scene hierarchy.
+
+
 ### Current State
 ![current_screenshot_or_render](/screenshots/screenshot_current.jpg)
+
+![red_dragon](/rendered_images/red_dragon.png)
 
 #### That is what I started from
 ![begin_screenshot](/screenshots/screenshot_begin.png)

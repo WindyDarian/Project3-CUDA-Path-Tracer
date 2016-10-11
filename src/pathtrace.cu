@@ -18,7 +18,8 @@
 // TOGGLE THEM
 #define ENABLE_STREAM_COMPACTION 1  // Optimization done: compact a forwarding indices array instead of dev_paths
 #define SORT_PATH_BY_MATERIAL 0
-#define CACHE_FIRST_INTERSECTION 1 
+// #define CACHE_FIRST_INTERSECTION 1 // now enable when STOCHASTIC_SAMPLING is not enabled
+#define STOCHASTIC_SAMPLING 1
 
 #define ERRORCHECK 1
 
@@ -160,18 +161,28 @@ __global__ void generateRayFromCamera(Camera cam, int iter, int traceDepth, Path
 	int x = (blockIdx.x * blockDim.x) + threadIdx.x;
 	int y = (blockIdx.y * blockDim.y) + threadIdx.y;
 
+	// TODO: DOF
+
 	if (x < cam.resolution.x && y < cam.resolution.y) {
 		int index = x + (y * cam.resolution.x);
 		PathSegment & segment = pathSegments[index];
 
 		segment.ray.origin = cam.position;
 		segment.color = glm::vec3(1.0f, 1.0f, 1.0f);
-
+#if STOCHASTIC_SAMPLING
+		auto rng = makeSeededRandomEngine(iter, x, y);
+		thrust::uniform_real_distribution<float> u01(0, 1);
+		segment.ray.direction = glm::normalize(cam.view
+			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f + u01(rng) - 0.5f)
+			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f + u01(rng) - 0.5f)
+		);
+#else
 		// TODO: implement antialiasing by jittering the ray
 		segment.ray.direction = glm::normalize(cam.view
 			- cam.right * cam.pixelLength.x * ((float)x - (float)cam.resolution.x * 0.5f)
 			- cam.up * cam.pixelLength.y * ((float)y - (float)cam.resolution.y * 0.5f)
 			);
+#endif
 
 		segment.pixelIndex = index;
 		segment.remainingBounces = traceDepth;
@@ -441,7 +452,8 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 				, dev_active_path_indices
 			);
 		}
-#if CACHE_FIRST_INTERSECTION
+//#if CACHE_FIRST_INTERSECTION
+#if !STOCHASTIC_SAMPLING
 		// cache first intersection
 		if (!first_intersection_cached)
 		{
@@ -471,9 +483,8 @@ void pathtrace(uchar4 *pbo, int frame, int iter) {
 		);
 
 #if ENABLE_STREAM_COMPACTION
-		//auto new_end = thrust::partition(thrust::device, thrust_dev_paths, thrust_dev_paths + num_paths_active, isPathAlive()); //slower than thrust::remove_if
-		//num_paths_active = new_end - thrust_dev_paths;
-		auto new_end = thrust::remove_if(thrust::device, dev_active_path_indices, dev_active_path_indices + num_paths_active, isPathTerminatedForIndex()); // slower
+		// compacting a index proxy array is faster than compacting the dev_paths on my computer
+		auto new_end = thrust::remove_if(thrust::device, dev_active_path_indices, dev_active_path_indices + num_paths_active, isPathTerminatedForIndex()); 
 		num_paths_active = new_end - dev_active_path_indices;
 #endif
 		// TODO: compact a pointer array instead to see if there is any performance increase

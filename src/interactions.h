@@ -67,7 +67,62 @@ glm::vec3 calculateRandomDirectionInHemisphere(
  * You may need to change the parameter list for your purposes!
  */
 
-__host__ __device__
+__host__ __device__ void shadeDiffusive(
+	Ray& ray,
+	glm::vec3& color,
+	const glm::vec3& intersect,
+	const glm::vec3& normal,
+	const Material &m,
+	thrust::default_random_engine &rng)
+{
+	ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
+	//ray.origin = intersect + precision_fix * normal;
+	color *= m.color;
+}
+
+__host__ __device__ void shadeReflective(
+	Ray& ray,
+	glm::vec3& color,
+	const glm::vec3& intersect,
+	const glm::vec3& normal,
+	const Material &m,
+	thrust::default_random_engine &rng)
+{
+	ray.direction = glm::reflect(ray.direction, normal);
+	//ray.origin = intersect + precision_fix * normal;
+	color *= m.color;
+}
+
+__host__ __device__ void shadeFresnel(
+	Ray& ray,
+	glm::vec3& color,
+	const glm::vec3& intersect,
+	const glm::vec3& normal,
+	const Material &m,
+	thrust::default_random_engine &rng)
+{
+	thrust::uniform_real_distribution<float> u01(0, 1);
+	auto rnd = u01(rng);
+	auto cos_t = glm::dot(ray.direction, normal);
+	auto ior = m.indexOfRefraction;
+	if (cos_t < 0)
+	{
+		ior = 1.f / m.indexOfRefraction;
+	}
+
+	auto r0 = pow((1 - ior) / (1 + ior), 2.0f);
+	auto fres = r0 + (1.f - r0) * glm::pow(1.f - glm::abs(cos_t), 5);
+	if (fres > rnd) 
+	{  
+		shadeReflective(ray, color, intersect, normal, m, rng);
+		return;
+	}
+
+	ray.direction = glm::normalize(glm::refract(ray.direction, normal, ior));
+	color *= m.color;
+}
+
+__host__ __device__ 
 void evaluateBsdfAndScatter(
 		Ray& ray,
 		glm::vec3& color,
@@ -77,20 +132,25 @@ void evaluateBsdfAndScatter(
 		thrust::default_random_engine &rng)
 {
 	constexpr float precision_fix = 1e-4f;
-
-	// TODO: partial?
-	if (m.hasReflective < 0.5f)
+	thrust::uniform_real_distribution<float> u01(0, 1);
+	auto rnd = u01(rng);
+	// Assuming refractive + reflective + diffuse == 1
+	if (rnd < m.hasRefractive)
 	{
-		// Diffuse only
-		ray.direction = calculateRandomDirectionInHemisphere(normal, rng);
-		ray.origin = intersect + precision_fix * normal;
-		color *= m.color;
+		// Fresnel
+		shadeFresnel(ray, color, intersect, normal, m, rng);
+	}
+	else if (rnd < m.hasRefractive + m.hasReflective)
+	{
+		// Reflection
+		shadeReflective(ray, color, intersect, normal, m, rng);
 	}
 	else
 	{
-		// Reflection only
-		ray.direction = glm::reflect(ray.direction, normal);
-		ray.origin = intersect + precision_fix * normal;
-		color *= m.color;
+		// Diffuse
+		shadeDiffusive(ray, color, intersect, normal, m, rng);
 	}
+
+	auto sign = glm::dot(ray.direction, normal) >= 0 ? 1 : -1;
+	ray.origin = intersect +  sign * precision_fix * normal;
 }
