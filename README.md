@@ -7,13 +7,14 @@ CUDA Path Tracer
 * Tested on:
   * Windows 10 x64 / Ubuntu 16.04 x64, i7-4720HQ @ 2.60GHz, 16GB Memory, GTX 970M 3072MB (personal laptop)
   * Visual Studio 2015 + CUDA 8.0 on Windows
-  * gcc/g++ 5.4 + CUDA 8.0 on Ubuntu
 
 __Additional third-party library used:__ tinyobjloader by syoyo (http://syoyo.github.io/tinyobjloader/)
 
 ![current_screenshot_or_render](/screenshots/screenshot_current.jpg)
 
 ![red_dragon](/rendered_images/red_dragon.png)
+
+(The dragon is... without Stochastic Sampled Antialiasing because... I don't have time to render it again before deadline (after one lateday)...)
 
 
 ### Things I have done
@@ -177,13 +178,24 @@ So, I have proven __both sorting and moving large structs are costly__, I decide
 
 ### Feature: OBJ model loading
 
-I enabled obj model loading feature with tinyobjloader.
+I enabled obj model loading feature with tinyobjloader. I describe scene like this so my path tracer will load the file and save the vertex data into a vertex buffer, which will be copied into GPU global memory.
+
+```
+// Dragon
+OBJECT 6
+mesh
+material 4
+TRANS       0 0 0
+ROTAT       0 45 0
+SCALE       3 3 3
+FILE        dragon.obj
+```
+
+If the vertex normal is different from triangle normal, my ray-triangle intersection can give interpolated normal (aka smooth shading).
 
 ![glass_dragon](/rendered_images/glass_dragon.png)
 
 ![red_dragon](/rendered_images/red_dragon.png)
-
-If the vertex normal is different from triangle normal, my ray-triangle intersection can give interpolated normal (aka smooth shading).
 
 During loading stage, a bounding box is generated for the model. It can be toggled on and off by `ENABLE_MESH_BBOX` macro in `intersections.h`.
 
@@ -197,6 +209,24 @@ It took me __89.0504 seconds__ to render the same image with bounding box for 10
 
 It is not efficient is because, in my opinion, my dragon has big wings, and it has a fairly large bounding box. __If any thread in a memory block hits the bounding box, the whole block needs to wait until it is finished.__ I guess I need to sort the ray, use a better path tracing model, or use a scene hierarchy.
 
+### Minor Features: Stochastic Sampling and Refrative Material with Fresnel Approximation
+
+#### Stochastic Sampling
+
+100 iterations without Stochastic Sampling | 100 iterations with Stochastic Sampling
+:-------------------------:|:-------------------------:
+![](/rendered_images/cornell_100_without_stochastic_sampling.png)  |  ![](/rendered_images/cornell_100_with_stochastic_sampling.png)
+
+Not much difference
+
+5000 iterations without Stochastic Sampling | 5000 iterations with Stochastic Sampling
+:-------------------------:|:-------------------------:
+![](/rendered_images/cornell_5000_without_stochastic_sampling.png)  |  ![](/rendered_images/cornell_5000_with_stochastic_sampling.png)
+
+The reflection on the ball is smoother.
+
+#### Refrative Material
+rendering!!
 
 ### Current State
 ![current_screenshot_or_render](/screenshots/screenshot_current.jpg)

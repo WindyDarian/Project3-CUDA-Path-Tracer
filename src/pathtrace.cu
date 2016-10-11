@@ -19,7 +19,7 @@
 #define ENABLE_STREAM_COMPACTION 1  // Optimization done: compact a forwarding indices array instead of dev_paths
 #define SORT_PATH_BY_MATERIAL 0
 // #define CACHE_FIRST_INTERSECTION 1 // now enable when STOCHASTIC_SAMPLING is not enabled
-#define STOCHASTIC_SAMPLING 1
+#define STOCHASTIC_SAMPLING 0
 
 #define ERRORCHECK 1
 
