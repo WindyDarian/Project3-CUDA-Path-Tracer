@@ -234,7 +234,7 @@ Not much difference
 The reflection on the ball is smoother.
 
 #### Refrative Material
-[refractive](/rendered_images/cornell_refractive.png)
+![refractive](/rendered_images/cornell_refractive.png)
 
 The indices of refraction of the front balls are 1.31 (ice), 1.62 (glass?), 2.614 (titanium dioxide) (from left to right)
 
