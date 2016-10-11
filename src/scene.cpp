@@ -183,8 +183,10 @@ int Scene::loadCamera() {
     return 1;
 }
 
-constexpr float float_min = std::numeric_limits<float>::max();
-constexpr float float_max = std::numeric_limits<float>::lowest();
+//constexpr float float_min = std::numeric_limits<float>::max();
+const float float_min = std::numeric_limits<float>::max();
+//constexpr float float_max = std::numeric_limits<float>::lowest();
+const float float_max = std::numeric_limits<float>::lowest();
 
 void Scene::loadMesh(const std::string& model_path, Geom& geom)
 {

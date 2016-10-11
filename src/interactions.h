@@ -131,7 +131,8 @@ void evaluateBsdfAndScatter(
 		const Material &m,
 		thrust::default_random_engine &rng)
 {
-	constexpr float precision_fix = 1e-3f;
+	//constexpr float precision_fix = 1e-3f;
+	const float precision_fix = 1e-3f;
 	thrust::uniform_real_distribution<float> u01(0, 1);
 	auto rnd = u01(rng);
 	// Assuming refractive + reflective + diffuse == 1
