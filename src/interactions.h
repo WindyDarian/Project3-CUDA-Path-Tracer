@@ -72,6 +72,7 @@ __host__ __device__ void shadeDiffusive(
 	glm::vec3& color,
 	const glm::vec3& intersect,
 	const glm::vec3& normal,
+	bool outside,
 	const Material &m,
 	thrust::default_random_engine &rng)
 {
@@ -85,6 +86,7 @@ __host__ __device__ void shadeReflective(
 	glm::vec3& color,
 	const glm::vec3& intersect,
 	const glm::vec3& normal,
+	bool outside,
 	const Material &m,
 	thrust::default_random_engine &rng)
 {
@@ -98,27 +100,26 @@ __host__ __device__ void shadeFresnel(
 	glm::vec3& color,
 	const glm::vec3& intersect,
 	const glm::vec3& normal,
+	bool outside,
 	const Material &m,
 	thrust::default_random_engine &rng)
 {
 	thrust::uniform_real_distribution<float> u01(0, 1);
 	auto rnd = u01(rng);
+	
+	// FIXME: entering one refractive material from another (rather than assuming air)
+	auto ratio = outside? 1.f / m.indexOfRefraction : m.indexOfRefraction;
+	
+	auto r0 = pow((1 - ratio) / (1 + ratio), 2.0f);
 	auto cos_t = glm::dot(ray.direction, normal);
-	auto ior = m.indexOfRefraction;
-	if (cos_t < 0)
-	{
-		ior = 1.f / m.indexOfRefraction;
-	}
-
-	auto r0 = pow((1 - ior) / (1 + ior), 2.0f);
 	auto fres = r0 + (1.f - r0) * glm::pow(1.f - glm::abs(cos_t), 5);
 	if (fres > rnd) 
 	{  
-		shadeReflective(ray, color, intersect, normal, m, rng);
+		shadeReflective(ray, color, intersect, normal, outside, m, rng);
 		return;
 	}
 
-	ray.direction = glm::normalize(glm::refract(ray.direction, normal, ior));
+	ray.direction = glm::normalize(glm::refract(ray.direction, normal, ratio));
 	color *= m.color;
 }
 
@@ -128,6 +129,7 @@ void evaluateBsdfAndScatter(
 		glm::vec3& color,
 		glm::vec3 intersect,
 		glm::vec3 normal,
+		bool outside,
 		const Material &m,
 		thrust::default_random_engine &rng)
 {
@@ -139,17 +141,17 @@ void evaluateBsdfAndScatter(
 	if (rnd < m.hasRefractive)
 	{
 		// Fresnel
-		shadeFresnel(ray, color, intersect, normal, m, rng);
+		shadeFresnel(ray, color, intersect, normal, outside, m, rng);
 	}
 	else if (rnd < m.hasRefractive + m.hasReflective)
 	{
 		// Reflection
-		shadeReflective(ray, color, intersect, normal, m, rng);
+		shadeReflective(ray, color, intersect, normal, outside, m, rng);
 	}
 	else
 	{
 		// Diffuse
-		shadeDiffusive(ray, color, intersect, normal, m, rng);
+		shadeDiffusive(ray, color, intersect, normal, outside, m, rng);
 	}
 
 	auto sign = glm::dot(ray.direction, normal) >= 0 ? 1 : -1;

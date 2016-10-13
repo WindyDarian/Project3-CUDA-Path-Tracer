@@ -269,6 +269,7 @@ __global__ void computeIntersections(
 	intersection.materialId = material_id;
 	intersection.surfaceNormal = normal;
 	intersection.intersection_point = intersect_point;
+	intersection.outside = outside;
 	path_material_ids[index] = material_id;
 }
 
@@ -315,6 +316,7 @@ __device__ void shadeAndScatter(
 		, path_segment.color
 		, intersection.intersection_point
 		, intersection.surfaceNormal
+		, intersection.outside
 		, material
 		, rng
 	);

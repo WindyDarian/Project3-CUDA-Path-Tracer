@@ -103,6 +103,7 @@ struct ShadeableIntersection {
 	glm::vec3 intersection_point;
 	glm::vec3 surfaceNormal;
 	int materialId;
+	bool outside;
 
 	__host__ __device__ bool exists()
 	{
