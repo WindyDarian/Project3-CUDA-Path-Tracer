@@ -10,6 +10,8 @@ CUDA Path Tracer
 
 __Additional third-party library used:__ tinyobjloader by syoyo (http://syoyo.github.io/tinyobjloader/)
 
+Thanks @itoupeter for pointing out an error in identifying inner/outer surfaces during refraction evaluation
+
 preview  | preview
 :-------------------------:|:-------------------------:
 ![preview](/screenshots/preview.gif)  |  ![preview2](/rendered_images/preview.png)
